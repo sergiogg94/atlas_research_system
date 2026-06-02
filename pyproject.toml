@@ -5,6 +5,7 @@ description = "Development of a AI research multiagent system from scratch"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "colorlog>=6.10.1",
     "fastapi>=0.136.3",
     "uvicorn>=0.48.0",
 ]

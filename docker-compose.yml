@@ -3,7 +3,28 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    container_name: atlas_research_backend
     ports:
       - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      - postgres
     volumes:
       - ./backend/app:/app/app
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: atlas_research_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+volumes:
+  postgres_data:

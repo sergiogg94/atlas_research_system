@@ -9,5 +9,6 @@ dependencies = [
     "fastapi>=0.136.3",
     "pydantic-settings>=2.14.1",
     "redis>=8.0.0",
+    "sqlalchemy>=2.0.50",
     "uvicorn>=0.48.0",
 ]

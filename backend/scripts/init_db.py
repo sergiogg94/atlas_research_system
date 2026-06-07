@@ -4,7 +4,7 @@ import sys
 
 # Obtén la ruta absoluta del directorio backend
 script_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.dirname(os.path.dirname(script_dir))
+backend_dir = os.path.dirname(script_dir)
 sys.path.insert(0, backend_dir)
 
 from app.core.database import init_db, engine

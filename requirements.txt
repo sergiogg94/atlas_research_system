@@ -14,6 +14,9 @@ certifi==2026.5.20
     # via
     #   httpcore
     #   httpx
+    #   requests
+charset-normalizer==3.4.7
+    # via requests
 click==8.4.1
     # via uvicorn
 colorlog==6.10.1
@@ -29,14 +32,58 @@ h11==0.16.0
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
-    # via atlas-research-system (pyproject.toml)
+    # via
+    #   atlas-research-system (pyproject.toml)
+    #   langgraph-sdk
+    #   langsmith
 idna==3.18
     # via
     #   anyio
     #   httpx
+    #   requests
+jsonpatch==1.33
+    # via langchain-core
+jsonpointer==3.1.1
+    # via jsonpatch
+langchain-core==1.4.2
+    # via
+    #   atlas-research-system (pyproject.toml)
+    #   langgraph
+    #   langgraph-checkpoint
+    #   langgraph-prebuilt
+    #   langgraph-sdk
+langchain-protocol==0.0.16
+    # via
+    #   langchain-core
+    #   langgraph-sdk
+langgraph==1.2.4
+    # via atlas-research-system (pyproject.toml)
+langgraph-checkpoint==4.1.1
+    # via
+    #   langgraph
+    #   langgraph-prebuilt
+langgraph-prebuilt==1.1.0
+    # via langgraph
+langgraph-sdk==0.4.2
+    # via langgraph
+langsmith==0.8.11
+    # via langchain-core
+orjson==3.11.9
+    # via
+    #   langgraph-sdk
+    #   langsmith
+ormsgpack==1.12.2
+    # via langgraph-checkpoint
+packaging==26.2
+    # via
+    #   langchain-core
+    #   langsmith
 pydantic==2.13.4
     # via
     #   fastapi
+    #   langchain-core
+    #   langgraph
+    #   langsmith
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
@@ -44,15 +91,27 @@ pydantic-settings==2.14.1
     # via atlas-research-system (pyproject.toml)
 python-dotenv==1.2.2
     # via pydantic-settings
+pyyaml==6.0.3
+    # via langchain-core
 redis==8.0.0
     # via atlas-research-system (pyproject.toml)
+requests==2.34.2
+    # via
+    #   langsmith
+    #   requests-toolbelt
+requests-toolbelt==1.0.0
+    # via langsmith
 sqlalchemy==2.0.50
     # via atlas-research-system (pyproject.toml)
 starlette==1.2.1
     # via fastapi
+tenacity==9.1.4
+    # via langchain-core
 typing-extensions==4.15.0
     # via
     #   fastapi
+    #   langchain-core
+    #   langchain-protocol
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
@@ -62,5 +121,21 @@ typing-inspection==0.4.2
     #   fastapi
     #   pydantic
     #   pydantic-settings
+urllib3==2.7.0
+    # via requests
+uuid-utils==0.16.0
+    # via
+    #   langchain-core
+    #   langsmith
 uvicorn==0.48.0
     # via atlas-research-system (pyproject.toml)
+websockets==15.0.1
+    # via
+    #   langgraph-sdk
+    #   langsmith
+xxhash==3.7.0
+    # via
+    #   langgraph
+    #   langsmith
+zstandard==0.25.0
+    # via langsmith

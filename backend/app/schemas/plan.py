@@ -23,7 +23,7 @@ class Plan(BaseModel):
 
 
 class PlanRequest(BaseModel):
-    task_description: str = Field(..., min_length=5, max_length=2000)
+    task_description: str = Field(..., min_length=10, max_length=2000)
 
 
 class PlanResponse(BaseModel):

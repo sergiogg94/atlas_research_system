@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
-from typing import Optional
 from enum import Enum
+from app.schemas.base import BaseResponse
+
 
 class StepType(str, Enum):
     SCOPING = "scoping"
@@ -26,6 +27,6 @@ class PlanRequest(BaseModel):
     task_description: str = Field(..., min_length=10, max_length=2000)
 
 
-class PlanResponse(BaseModel):
+class PlanResponse(BaseResponse):
     plan: Plan
     provider: str

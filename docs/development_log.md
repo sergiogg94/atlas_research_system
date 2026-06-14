@@ -29,3 +29,41 @@ Laid the foundation for a production-grade multi-agent research system. Built th
 3. **Async SQLAlchemy 2.0** — The `async_sessionmaker` pattern is cleaner and aligns with modern Python async practices. Know the difference between `sync` and `async` ORM sessions.
 4. **Pydantic v2 for config** — `pydantic-settings` with `.env` loading is the de facto standard for production FastAPI apps. Using `lru_cache` on `get_settings()` prevents repeated file I/O.
 5. **Designing for testability** — The EchoProvider means every component can be integration-tested without a real LLM. This decoupling between infrastructure and business logic is a hallmark of production AI systems.
+
+---
+
+## Week 2: Planner Agent & LangGraph (In Progress)
+
+### Summary
+This week was constrained by limited availability due to workload at my primary job. Despite that, I completed through **Day 4** of the plan: LangGraph setup, the prompt system, the Planner Agent implementation with a StateGraph, and the `/api/v1/plan` endpoint. Days 5–7 (tests, Ollama real integration, and documentation) remain pending and will be carried forward.
+
+### Key Deliverables
+- **LangGraph integrated** — `langgraph>=0.4.0` added to dependencies, compiled `requirements.txt` and `uv.lock`
+- **Prompt system** — Abstract `PromptTemplate` base class with `template`, `version`, and `description` properties; versioned planner prompts (`planner_system` v1.0.0, `planner_user` v1.0.0); `get_prompt()` registry for lookup-by-name
+- **Planner Agent** — LangGraph `StateGraph` with 3 nodes (`validate_task` → `generate_plan` → `parse_plan`), conditional edges for error routing, and full async support
+- **Planner schemas** — `Plan`, `PlanStep`, `StepType` enum (scoping/research/analysis/synthesis), `PlanRequest`, `PlanResponse`; `BaseResponse` base class for all API responses
+- **`POST /api/v1/plan` endpoint** — Invokes the compiled graph, validates input, returns structured plans with error propagation as HTTP 400
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| PromptTemplate as ABC | Enforces consistent versioning and metadata across all prompts; makes prompt iteration traceable |
+| StepType enum | Categorizes each research step by purpose, enabling downstream agents to decide how to execute based on step type |
+| Conditional error edges in LangGraph | Errors propagate through the graph explicitly rather than raising exceptions — keeps state consistent and debuggable |
+| StateGraph over linear chain | The conditional routing foundation prepares for complex multi-agent orchestration in later weeks |
+| BaseResponse for all endpoints | Consistent API response envelope (`status`, `timestamp`) from day one; avoids retrofitting later |
+
+### Pending (carried to Week 3)
+- [ ] Tests for LLM provider, Planner Agent, and `/plan` endpoint
+- [ ] Retry logic with exponential backoff in LLM provider
+- [ ] Timeout handling in `/plan` endpoint
+- [ ] Real Ollama integration test
+- [ ] Logging instrumentation in agent nodes
+- [ ] Documentation updates (README, ARCHITECTURE)
+
+### Key Learnings
+1. **LangGraph state model** — The `TypedDict`-based state that LangGraph merges across nodes is elegant but requires discipline: every node must return the full state shape. Unlike Redux, there is no built-in reducer — you merge manually.
+2. **Conditional edges as control flow** — `add_conditional_edges` with routing functions is the LangGraph equivalent of if/else. This pattern is essential for agents that make decisions (retry, skip, escalate).
+3. **Async graph execution** — Mixing sync and async nodes in LangGraph works, but consistency matters. Making `validate_task` and `parse_plan` sync while `generate_plan` is async is intentional (I/O-bound vs CPU-bound separation).
+4. **Prompt versioning as code** — Treating prompts as first-class classes with explicit versions makes it possible to A/B test, roll back, and audit prompt changes. This is a lightweight alternative to dedicated prompt management tools.
+5. **Realistic scheduling** — With a full-time job, 2–3 hours daily is optimistic. Completing 4/7 days is a realistic pace; the key is shipping something functional each week.

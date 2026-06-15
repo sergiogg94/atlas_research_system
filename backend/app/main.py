@@ -1,8 +1,19 @@
+from contextlib import asynccontextmanager
+
+from app.api.routes import health, llm, plan
+from app.core.logging import logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import health, llm, plan
 
-app = FastAPI(title="Atlas Research System", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting up Atlas Research System")
+    yield
+    logger.info("Shutting down Atlas Research System")
+
+
+app = FastAPI(title="Atlas Research System", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,6 +26,8 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(llm.router, prefix="/api/v1", tags=["llm"])
 app.include_router(plan.router, prefix="/api/v1", tags=["plan"])
+
+logger.info("Routers registered: /api/v1/health, /api/v1/llm, /api/v1/plan")
 
 
 @app.get("/")

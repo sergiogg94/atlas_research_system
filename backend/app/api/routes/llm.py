@@ -1,6 +1,7 @@
 import asyncio
 
 from app.core.llm.factory import get_llm_provider
+from app.core.logging import logger
 from app.schemas.llm import GenerateRequest, GenerateResponse, ModelsResponse
 from fastapi import APIRouter, HTTPException
 
@@ -15,10 +16,23 @@ router = APIRouter()
 )
 async def test_generate(request: GenerateRequest):
     provider = get_llm_provider()
+    logger.info(
+        "Generate request: provider=%s prompt_len=%d",
+        type(provider).__name__,
+        len(request.prompt),
+    )
     try:
         response = await provider.generate(request.prompt, request.system)
     except asyncio.TimeoutError:
+        logger.error(
+            "LLM generation timed out for provider=%s", type(provider).__name__
+        )
         raise HTTPException(status_code=504, detail="LLM generation timed out")
+    logger.info(
+        "Generate success: provider=%s response_len=%d",
+        type(provider).__name__,
+        len(response),
+    )
     return GenerateResponse(
         provider=type(provider).__name__,
         response=response,
@@ -33,10 +47,19 @@ async def test_generate(request: GenerateRequest):
 )
 async def list_models():
     provider = get_llm_provider()
+    logger.info("List models request: provider=%s", type(provider).__name__)
     try:
         models = await provider.list_models()
     except asyncio.TimeoutError:
+        logger.error(
+            "LLM model listing timed out for provider=%s", type(provider).__name__
+        )
         raise HTTPException(status_code=504, detail="LLM model listing timed out")
+    logger.info(
+        "List models success: provider=%s count=%d",
+        type(provider).__name__,
+        len(models),
+    )
     return ModelsResponse(
         provider=type(provider).__name__,
         models=models,

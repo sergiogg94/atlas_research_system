@@ -1,7 +1,10 @@
+from typing import Optional
+
 import httpx
 from app.config import get_settings
 from app.core.llm.base import LLMProvider
-from typing import Optional
+from app.core.llm.retry import retry_config
+from tenacity import retry
 
 
 class OllamaProvider(LLMProvider):
@@ -10,6 +13,7 @@ class OllamaProvider(LLMProvider):
         self.base_url = settings.ollama_base_url or "http://localhost:11434"
         self.model = settings.ollama_model
 
+    @retry(**retry_config)
     async def generate(self, prompt: str, system: Optional[str] = None) -> str:
         async with httpx.AsyncClient(timeout=60.0) as client:
             payload = {
@@ -30,6 +34,7 @@ class OllamaProvider(LLMProvider):
 
             return response.json()["response"]
 
+    @retry(**retry_config)
     async def list_models(self) -> list[str]:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{self.base_url}/api/tags")

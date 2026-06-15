@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException
-from app.schemas.plan import PlanRequest, PlanResponse
+import asyncio
+
 from app.core.agents.planner import build_planner_graph
+from app.schemas.plan import PlanRequest, PlanResponse
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
@@ -13,11 +15,15 @@ router = APIRouter()
 )
 async def create_plan(request: PlanRequest):
     graph = build_planner_graph()
-    result = await graph.ainvoke(
-        {
-            "task_description": request.task_description,
-        }
-    )
+
+    try:
+        result = await graph.ainvoke(
+            {
+                "task_description": request.task_description,
+            }
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Planner timed out")
 
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])

@@ -1,19 +1,26 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
+    # Database settings
     database_url: str
-    redis_url: str
     postgres_user: str
     postgres_password: str
     postgres_host: str
     postgres_port: int
     postgres_db: str
+
+    # Redis settings
+    redis_url: str
+
+    # API settings
     api_port: int = 8000
     debug: bool = True
+    log_level: str = "DEBUG"
 
     # LLM provider settings
     llm_provider: str = "echo"  # Default to "echo" for testing purposes

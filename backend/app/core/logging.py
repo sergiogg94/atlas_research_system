@@ -1,6 +1,10 @@
 import logging
 import logging.config
+
 import colorlog
+from app.config import get_settings
+
+settings = get_settings()
 
 custom_dict = {
     "version": 1,
@@ -20,7 +24,7 @@ custom_dict = {
     "loggers": {
         "": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": settings.log_level,
         }
     },
 }

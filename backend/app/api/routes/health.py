@@ -1,7 +1,9 @@
+import redis.asyncio as redis
+from app.config import Settings, get_settings
+from app.core.database import engine
 from app.schemas.base import BaseResponse
 from fastapi import APIRouter, Depends
-from app.config import get_settings, Settings
-import redis.asyncio as redis
+from sqlalchemy import text
 
 router = APIRouter()
 
@@ -32,7 +34,13 @@ async def health_check(settings: Settings = Depends(get_settings)):
         overall_status = "degraded"
 
     # Database check
-    services["database"] = "no_checked"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        services["database"] = "healthy"
+    except Exception as e:
+        services["database"] = "unhealthy"
+        overall_status = "degraded"
 
     return HealthResponse(
         status=overall_status,

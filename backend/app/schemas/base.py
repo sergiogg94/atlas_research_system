@@ -25,8 +25,12 @@ class ErrorResponse(BaseModel):
     """Model for error responses."""
 
     status: str = Field(default="error", description="Response status")
-    error_code: str = Field(..., description="Error code", example="VALIDATION_ERROR")
-    message: str = Field(..., description="Error message", example="Invalid input")
+    error_code: str = Field(
+        ..., description="Error code", json_schema_extra={"example": "VALIDATION_ERROR"}
+    )
+    message: str = Field(
+        ..., description="Error message", json_schema_extra={"example": "Invalid input"}
+    )
     details: Optional[dict] = Field(None, description="Additional error details")
     timestamp: datetime = Field(
         default_factory=datetime.now, description="Response timestamp"

@@ -41,6 +41,8 @@ idna==3.18
     #   anyio
     #   httpx
     #   requests
+iniconfig==2.3.0
+    # via pytest
 jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.1.1
@@ -78,6 +80,9 @@ packaging==26.2
     # via
     #   langchain-core
     #   langsmith
+    #   pytest
+pluggy==1.6.0
+    # via pytest
 pydantic==2.13.4
     # via
     #   fastapi
@@ -88,6 +93,14 @@ pydantic==2.13.4
 pydantic-core==2.46.4
     # via pydantic
 pydantic-settings==2.14.1
+    # via atlas-research-system (pyproject.toml)
+pygments==2.20.0
+    # via pytest
+pytest==9.1.0
+    # via
+    #   atlas-research-system (pyproject.toml)
+    #   pytest-asyncio
+pytest-asyncio==1.4.0
     # via atlas-research-system (pyproject.toml)
 python-dotenv==1.2.2
     # via pydantic-settings

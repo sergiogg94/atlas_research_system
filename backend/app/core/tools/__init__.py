@@ -1,4 +1,5 @@
 from app.core.tools.base import BaseTool
+from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
 
 _tools: dict[str, BaseTool] = {}
@@ -21,3 +22,4 @@ def list_tools() -> dict[str, str]:
 
 # Initial tool registration
 register_tool(WebSearchTool())
+register_tool(WebScraperTool())

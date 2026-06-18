@@ -1,10 +1,49 @@
+import logging
+
 import httpx
+from app.core.logging import logger
 from tenacity import (
+    before_sleep_log,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
+
+
+def _before(retry_state):
+    try:
+        fname = retry_state.fn.__name__
+    except Exception:
+        fname = str(retry_state.fn)
+    logger.info("Retry starting: fn=%s attempt=%s", fname, retry_state.attempt_number)
+
+
+def _after(retry_state):
+    try:
+        fname = retry_state.fn.__name__
+    except Exception:
+        fname = str(retry_state.fn)
+
+    exc = None
+    if retry_state.outcome:
+        try:
+            exc = retry_state.outcome.exception()
+        except Exception:
+            exc = None
+
+    if exc:
+        logger.warning(
+            "Retry attempt %s for %s failed: %s",
+            retry_state.attempt_number,
+            fname,
+            exc,
+        )
+    else:
+        logger.info(
+            "Retry attempt %s for %s completed", retry_state.attempt_number, fname
+        )
+
 
 retry_config = {
     "stop": stop_after_attempt(3),
@@ -15,4 +54,8 @@ retry_config = {
             httpx.NetworkError,
         )
     ),
+    "reraise": True,
+    "before": _before,
+    "after": _after,
+    "before_sleep": before_sleep_log(logger, logging.WARNING),
 }

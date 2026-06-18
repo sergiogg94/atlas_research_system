@@ -1,3 +1,4 @@
+from app.core.logging import logger
 from app.core.tools.base import BaseTool, ToolResult
 from ddgs import DDGS
 
@@ -14,9 +15,15 @@ class WebSearchTool(BaseTool):
     async def execute(self, query: str, max_results: int = 5) -> ToolResult:
         try:
             with DDGS() as ddgs:
+                logger.info(
+                    "Performing web search for query: '%s' with max_results=%s",
+                    query,
+                    max_results,
+                )
                 results = list(ddgs.text(query, max_results=max_results))
             return ToolResult(success=True, data=results)
         except Exception as e:
+            logger.error("Error during web search for query '%s': %s", query, str(e))
             return ToolResult(success=False, error=str(e))
 
     def input_schema(self) -> dict:

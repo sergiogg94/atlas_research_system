@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
 from enum import Enum
+
 from app.schemas.base import BaseResponse
+from pydantic import BaseModel, Field
 
 
 class StepType(str, Enum):
@@ -29,4 +30,3 @@ class PlanRequest(BaseModel):
 
 class PlanResponse(BaseResponse):
     plan: Plan
-    provider: str

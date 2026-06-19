@@ -35,9 +35,4 @@ async def create_plan(request: PlanRequest):
         logger.error("Planner error: %s", result["error"])
         raise HTTPException(status_code=400, detail=result["error"])
 
-    logger.info(
-        "Plan generated successfully: provider=%s plan_len=%d",
-        result.get("provider"),
-        len(result.get("plan", "")),
-    )
-    return PlanResponse(plan=result["plan"], provider=result["provider"])
+    return PlanResponse(plan=result["plan"])

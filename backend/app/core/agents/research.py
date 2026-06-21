@@ -1,6 +1,8 @@
 from typing import Optional, TypedDict
 
+from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
+from app.core.prompts import get_prompt
 from app.core.tools import get_tool
 from app.schemas.plan import Plan
 from langgraph.graph import END, StateGraph
@@ -90,7 +92,7 @@ async def scrape_content(state: ResearchState) -> ResearchState:
 
 
 async def synthesize_finding(state: ResearchState) -> ResearchState:
-    """Sinthesizes the findings into a summary for the current step."""
+    """Synthesizes the findings into a summary for the current step using the LLM."""
     if state.get("error"):
         logger.debug(
             "synthesize_finding skipped due to prior error: %s", state.get("error")
@@ -98,11 +100,41 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
         return state
 
     logger.info("Synthesizing findings for step %s", state["current_step"])
+    provider = get_llm_provider()
+    sys_prompt = get_prompt("research_system")
+    user_prompt = get_prompt("research_user")
+
+    search_results_text = "\n".join(
+        [
+            f"- {item.get('title', '')} | {item.get('href') or item.get('link', '')}"
+            for item in state.get("search_results", [])[:5]
+        ]
+    ) or "No search results available."
+
+    scraped_contents_text = "\n\n".join(
+        [
+            f"URL: {content.get('url', '')}\nTitle: {content.get('title', '')}\nContent: {content.get('content', '')[:1000]}"
+            for content in state.get("scraped_contents", [])
+        ]
+    ) or "No scraped content available."
+
+    prompt_text = user_prompt.format(
+        objective=state["objective"],
+        current_step=state["current_step"],
+        current_query=state["current_query"] or "",
+        search_results=search_results_text,
+        scraped_contents=scraped_contents_text,
+    )
+
+    logger.debug("Research user prompt (truncated): %s", prompt_text[:500])
+    summary = await provider.generate(prompt=prompt_text, system=sys_prompt.template)
+
+    logger.info("LLM generated research summary; length=%s", len(summary) if summary else 0)
+
     finding = {
         "step": state["current_step"],
         "query": state["current_query"],
-        "summary": f"Found {len(state.get('search_results', []))} results, "
-        f"scraped {len(state.get('scraped_contents', []))} pages",
+        "summary": summary.strip() if summary else "No summary could be generated.",
     }
 
     findings = state.get("findings", []) + [finding]

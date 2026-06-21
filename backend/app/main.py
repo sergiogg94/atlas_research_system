@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from app.api.routes import health, llm, plan
+from app.api.routes import health, llm, plan, research
 from app.core.logging import logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(llm.router, prefix="/api/v1", tags=["llm"])
 app.include_router(plan.router, prefix="/api/v1", tags=["plan"])
+app.include_router(research.router, prefix="/api/v1", tags=["research"])
 
 logger.info("Routers registered: /api/v1/health, /api/v1/llm, /api/v1/plan")
 

@@ -111,10 +111,11 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
         ]
     ) or "No search results available."
 
+    scraped_contents = state.get("scraped_contents") or []
     scraped_contents_text = "\n\n".join(
         [
             f"URL: {content.get('url', '')}\nTitle: {content.get('title', '')}\nContent: {content.get('content', '')[:1000]}"
-            for content in state.get("scraped_contents", [])
+            for content in scraped_contents
         ]
     ) or "No scraped content available."
 

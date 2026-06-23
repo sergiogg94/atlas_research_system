@@ -1,9 +1,10 @@
-import httpx
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import pytest
 from app.core.tools import get_tool, list_tools, register_tool
 from app.core.tools.base import BaseTool, ToolResult
+from app.core.tools.python_executor import PythonExecutorTool
 from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
 
@@ -176,6 +177,97 @@ class TestWebScraperTool:
         assert tool.description
 
 
+class TestPythonExecutorTool:
+    @pytest.fixture
+    def executor(self):
+        return PythonExecutorTool()
+
+    @pytest.mark.asyncio
+    async def test_blocked_import_os(self, executor):
+        result = await executor.execute("import os")
+        assert result.success is False
+        assert "not allowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_blocked_import_subprocess(self, executor):
+        result = await executor.execute("import subprocess")
+        assert result.success is False
+        assert "not allowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_blocked_exec_function(self, executor):
+        result = await executor.execute('exec("print(1)")')
+        assert result.success is False
+        assert "not allowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_blocked_eval_function(self, executor):
+        result = await executor.execute('eval("1+1")')
+        assert result.success is False
+        assert "not allowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_blocked_open_function(self, executor):
+        result = await executor.execute('open("/etc/passwd")')
+        assert result.success is False
+        assert "not allowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_blocked_import_from_os(self, executor):
+        result = await executor.execute("from os import system")
+        assert result.success is False
+        assert "not allowed" in result.error
+
+    @pytest.mark.asyncio
+    async def test_execute_simple_print(self, executor):
+        result = await executor.execute('print("hello world")')
+        assert result.success is True
+        assert "hello world" in result.data["stdout"]
+        assert result.data["stderr"] == ""
+
+    @pytest.mark.asyncio
+    async def test_execute_math_operations(self, executor):
+        code = "import math\nresult = math.sqrt(16)\nprint(result)"
+        result = await executor.execute(code)
+        assert result.success is True
+        assert "4" in result.data["stdout"]
+
+    @pytest.mark.asyncio
+    async def test_execute_json_operations(self, executor):
+        code = 'import json\ndata = {"name": "test"}\nprint(json.dumps(data))'
+        result = await executor.execute(code)
+        assert result.success is True
+        assert "name" in result.data["stdout"]
+
+    @pytest.mark.asyncio
+    async def test_execute_error_handling(self, executor):
+        code = "print(undefined_variable)"
+        result = await executor.execute(code)
+        assert result.success is False
+        assert "NameError" in result.data["stderr"]
+
+    @pytest.mark.asyncio
+    async def test_timeout_infinite_loop(self, executor):
+        code = "while True: pass"
+        result = await executor.execute(code, timeout=2)
+        assert result.success is False
+        assert "return code -9" in result.error.lower()
+
+    def test_input_schema_structure(self, executor):
+        schema = executor.input_schema()
+        assert schema["type"] == "object"
+        assert "code" in schema["properties"]
+        assert "timeout" in schema["properties"]
+        assert schema["required"] == ["code"]
+
+    def test_name_property(self, executor):
+        assert executor.name == "python_executor"
+
+    def test_description_property(self, executor):
+        assert executor.description
+        assert "code" in executor.description.lower()
+
+
 class TestToolRegistry:
     def test_get_tool_returns_registered_tool(self):
         tool = get_tool("web_search")
@@ -192,7 +284,8 @@ class TestToolRegistry:
         tools = list_tools()
         assert "web_search" in tools
         assert "web_scraper" in tools
-        assert len(tools) >= 2
+        assert "python_executor" in tools
+        assert len(tools) >= 3
 
     def test_register_tool_adds_and_overrides(self):
         from app.core.tools import _tools

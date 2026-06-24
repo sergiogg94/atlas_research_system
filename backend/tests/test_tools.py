@@ -7,6 +7,7 @@ from app.core.tools.base import BaseTool, ToolResult
 from app.core.tools.python_executor import PythonExecutorTool
 from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
+from app.core.tools.sql_query import SQLQueryTool
 
 
 class TestWebSearchTool:
@@ -266,6 +267,50 @@ class TestPythonExecutorTool:
     def test_description_property(self, executor):
         assert executor.description
         assert "code" in executor.description.lower()
+
+
+class TestSQLQueryTool:
+    @pytest.fixture
+    def executor(self):
+        return SQLQueryTool()
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_select(self, executor):
+        result = await executor.execute("DROP TABLE tasks")
+        assert not result.success
+        assert "Only SELECT" in result.error
+
+    @pytest.mark.asyncio
+    async def test_rejects_data_export(self, executor):
+        result = await executor.execute("SELECT * INTO OUTFILE ...")
+        assert not result.success
+        assert "Forbidden SQL pattern" in result.error
+
+    @pytest.mark.asyncio
+    async def test_rejects_multiple_statements(self, executor):
+        result = await executor.execute("SELECT 1; SELECT 2")
+        assert not result.success
+        assert "Multiple SQL statements" in result.error
+
+    @pytest.mark.asyncio
+    async def test_rejects_sql_comments(self, executor):
+        result = await executor.execute("SELECT 1 -- comment")
+        assert not result.success
+        assert "SQL comments" in result.error or "meta-commands" in result.error
+
+    @pytest.mark.asyncio
+    async def test_select_from_pg_catalog(self, executor):
+        result = await executor.execute("SELECT 1 as test")
+        assert result.success == True
+        assert result.data["columns"] == ["test"]
+
+    # @pytest.mark.asyncio
+    # async def test_with_cte_executes_and_returns_columns(self, executor):
+    #     query = "WITH t AS (SELECT 1 as test) SELECT * FROM t"
+    #     result = await executor.execute(query)
+    #     assert result.success is True
+    #     assert result.data["columns"] == ["test"]
+    #     assert result.data["row_count"] == 1
 
 
 class TestToolRegistry:

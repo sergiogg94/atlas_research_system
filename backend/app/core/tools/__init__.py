@@ -2,6 +2,7 @@ from app.core.tools.base import BaseTool
 from app.core.tools.python_executor import PythonExecutorTool
 from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
+from app.core.tools.sql_query import SQLQueryTool
 
 _tools: dict[str, BaseTool] = {}
 
@@ -25,3 +26,4 @@ def list_tools() -> dict[str, str]:
 register_tool(WebSearchTool())
 register_tool(WebScraperTool())
 register_tool(PythonExecutorTool())
+register_tool(SQLQueryTool())

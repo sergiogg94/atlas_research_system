@@ -16,9 +16,6 @@ Produce a concise, actionable summary of the findings from this step.
     version = "1.0.0"
     description = "System prompt for the Research Agent to synthesize search and scraped evidence into a concise finding."
 
-    def format(self, **kwargs: str) -> str:
-        return self.template
-
 
 class ResearchUserPrompt(PromptTemplate):
     template = """Objective: {objective}
@@ -35,20 +32,3 @@ If the evidence is weak or not relevant, say the findings are inconclusive based
 Return only the summary text."""
     version = "1.0.0"
     description = "User prompt template for the Research Agent to summarize step findings from search and scraped content."
-
-    def format(
-        self,
-        *,
-        objective: str,
-        current_step: int,
-        current_query: str,
-        search_results: str,
-        scraped_contents: str,
-    ) -> str:
-        return self.template.format(
-            objective=objective,
-            current_step=current_step,
-            current_query=current_query,
-            search_results=search_results,
-            scraped_contents=scraped_contents,
-        )

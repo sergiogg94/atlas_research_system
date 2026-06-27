@@ -35,10 +35,9 @@ Use exactly this structure:
   ]
 }"""
     version = "1.0.0"
-    description = "System prompt for the Planner Agent to decompose tasks into structured plans"
-
-    def format(self, **kwargs: str) -> str:
-        return self.template
+    description = (
+        "System prompt for the Planner Agent to decompose tasks into structured plans"
+    )
 
 
 class PlannerUserPrompt(PromptTemplate):
@@ -53,6 +52,3 @@ Requirements:
 - Include only the JSON output."""
     version = "1.0.0"
     description = "User prompt template for the Planner Agent"
-
-    def format(self, *, task_description: str) -> str:
-        return self.template.format(task_description=task_description)

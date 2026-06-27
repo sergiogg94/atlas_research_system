@@ -52,6 +52,7 @@ async def generate_code(state: DataState) -> DataState:
         prompt=user_prompt.format(
             task=state["task"],
             analysis=state.get("analysis", ""),
+            error=state.get("error", "None"),
         ),
         system=system_prompt,
     )

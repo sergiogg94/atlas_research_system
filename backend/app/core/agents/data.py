@@ -39,10 +39,6 @@ async def analyze_task(state: DataState) -> DataState:
 
 async def generate_code(state: DataState) -> DataState:
     """Generates Python or SQL code based on the analysis."""
-    if state.get("error"):
-        logger.debug("generate_code skipped due to prior error: %s", state.get("error"))
-        return state
-
     logger.info("Generating code for the task")
     provider = get_llm_provider()
     user_prompt = get_prompt("data_code_gen_user")
@@ -62,7 +58,8 @@ async def generate_code(state: DataState) -> DataState:
 
 async def execute_python(state: DataState) -> DataState:
     """Execute the generated Python code."""
-    if state.get("error") or not state.get("code"):
+    if not state.get("code"):
+        logger.debug("No code provided for python execution node")
         return state
 
     logger.info("Executing python code")
@@ -79,12 +76,13 @@ async def execute_python(state: DataState) -> DataState:
 
 async def execute_sql(state: DataState) -> DataState:
     """Execute the generated SQL query."""
-    if state.get("error") or not state.get("query"):
+    if not state.get("code"):
+        logger.debug("No code provided for SQL execution node")
         return state
 
     logger.info("Executing SQL query")
     tool = get_tool("sql_query")
-    result = await tool.execute(query=state["query"])
+    result = await tool.execute(query=state["code"])
 
     return {
         **state,

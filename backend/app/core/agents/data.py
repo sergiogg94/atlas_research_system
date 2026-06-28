@@ -31,7 +31,7 @@ async def analyze_task(state: DataState) -> DataState:
 
     response = await provider.generate(
         prompt=user_prompt.format(task=state["task"], context=state.get("context", "")),
-        system=system_prompt,
+        system=system_prompt.template,
     )
 
     return {**state, "analysis": response}
@@ -50,7 +50,7 @@ async def generate_code(state: DataState) -> DataState:
             analysis=state.get("analysis", ""),
             error=state.get("error", "None"),
         ),
-        system=system_prompt,
+        system=system_prompt.template,
     )
 
     return {**state, "code": response}

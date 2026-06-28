@@ -15,8 +15,8 @@ router = APIRouter()
     description="Executes a data task basedon the task description and context",
 )
 async def execute_data_task(request: DataRequest):
-    graph = build_data_graph()
     logger.info("Recived data request")
+    graph = build_data_graph()
 
     try:
         result = await asyncio.wait_for(

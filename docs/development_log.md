@@ -104,3 +104,40 @@ This week closed the pending items from the previous plan and implemented the `t
 5. **Timeouts and expectations** — The `/api/v1/research` endpoint uses a wide timeout (10 minutes) to allow multi-step pipelines; in production timeouts should be tuned and checkpoints/pagination used.
 
 ---
+
+## Week 4: Data Agent, Python Executor & SQL Query Tool
+
+### Summary
+This week completed the core data-processing layer of the multi-agent system. Three major components were built: a sandboxed Python executor with AST-level security validation, a read-only SQL query tool against PostgreSQL, and a full Data Agent (LangGraph StateGraph) that uses an LLM to analyze tasks and generate/execute code or SQL. The testing infrastructure was also significantly expanded with comprehensive test suites for all tools, agents (Research and Data), and API endpoints.
+
+### Key Deliverables
+- **PythonExecutorTool** — Sandboxed Python execution via `subprocess` with AST validation, whitelist-based import control, empty environment, memory limits, CPU timeout, and code sanitization. Blocks `os`, `subprocess`, `exec`, `eval`, `compile`, `__import__`, `open` at the AST level.
+- **SQLQueryTool** — PostgreSQL read-only query tool accepting `SELECT` and `WITH` CTE statements. Validation covers forbidden DDL/DML patterns (INSERT, UPDATE, DELETE, DROP, TRUNCATE, etc.), multi-statement detection, SQL comments, and dangerous PostgreSQL functions via regex.
+- **Data Agent** — LangGraph `StateGraph` with 4 async nodes (`analyze_task` → `generate_code` → `execute_python`/`execute_sql`). Conditional edges route to Python or SQL based on LLM analysis, and a retry loop re-generates code up to 3 times on execution errors.
+- **Data prompts** — 4 versioned prompt templates (`data_analysis_system`, `data_analysis_user`, `data_code_gen_system`, `data_code_gen_user`) registered in a centralized prompt registry.
+- **Endpoint `POST /api/v1/data`** — Accepts `DataRequest` (task, context, max_iterations), runs the Data Agent graph with a 180s timeout, returns `DataResponse` with code/query/result/error.
+- **Comprehensive test suite:**
+  - `test_tools.py` — 35 tests covering all 4 tools (search, scraper, python executor security/functionality, SQL validation, tool registry)
+  - `test_research.py` — 6 tests for the Research Agent (single/multi-step, search/scraper/LLM failure modes)
+  - `test_data_agent.py` — 8 tests for the Data Agent (Python/SQL paths, retry logic, max retries, empty responses, error propagation)
+  - `test_api.py` — 16 integration tests for all 5 endpoints (root, health, generate, models, plan, research) using `TestClient` and mocked providers
+  - `conftest.py` — Test fixtures (async client, DB session, LLM provider)
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| AST-level import validation | Catches dangerous imports before execution without running the code; complements runtime sandboxing |
+| Subprocess with empty `env={}` | Prevents access to environment variables, PATH, and system config from executed code |
+| `resource.setrlimit` for memory/CPU | Linux-native resource limits are more robust than Python-level guards against infinite loops and memory bombs |
+| Subprocess sandbox over Docker-in-Docker | Docker sandboxing was considered but subprocess + `resource` limits + AST validation was chosen for lower complexity, no container runtime dependency, and sufficient isolation for a prototyping phase. Docker sandbox remains the production target for true multi-tenant isolation |
+| SQL validation via regex patterns | Covers 20+ forbidden patterns (DDL, DML, dangerous functions) with a single pass; easy to extend |
+| Data Agent as conditional StateGraph | The LLM decides the execution path (Python vs SQL) rather than hardcoding it, making the agent flexible across data tasks |
+| Retry loop in graph edges (max 3) | Self-healing: the LLM receives the previous error and generates corrected code, without human intervention |
+| Centralized test infrastructure | `conftest.py` with `AsyncClient`, `FakeLLMProvider`, and mock tools enables fast, deterministic tests without external dependencies |
+
+### Key Learnings
+1. **AST-based security is layered, not absolute** — Parsing the AST blocks statically detectable dangerous patterns, but dynamic attacks (e.g., `getattr(__builtins__, 'exec')`) require runtime sandboxing. Combining AST validation + subprocess isolation + resource limits provides defense in depth.
+2. **SQL validation is an arms race** — Regex-based blocking of dangerous patterns works for common cases but is not exhaustive. Prepared statements via `text()` + params mitigate injection risks, and restricting to SELECT/WITH limits the blast radius.
+3. **Mocking LangGraph for tests** — Patching `get_llm_provider` and `get_tool` at the module level (where they are imported) lets tests run the full graph without a real LLM or external services. `FakeLLMProvider` with controllable responses enables precise path coverage.
+4. **Conditional edges are the agent's decision logic** — The `needs_sql` and `has_error` routing functions in the Data Agent mirror real decision-making. Testing these functions in isolation (unit tests) before running the full graph catches routing bugs early.
+5. **Prompt engineering for code generation** — The data code-gen prompts include the previous error message on retry, which significantly improves the LLM's ability to self-correct. Explicit safety rules in the system prompt reduce hallucinated dangerous code.

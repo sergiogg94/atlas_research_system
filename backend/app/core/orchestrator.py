@@ -5,6 +5,7 @@ from app.core.agents.data import build_data_graph
 from app.core.agents.planner import build_planner_graph
 from app.core.agents.research import build_research_graph
 from app.core.agents.synthesis import build_synthesis_graph
+from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
 from app.core.state_manager import state_manager
 from langgraph.graph import END, StateGraph
@@ -28,6 +29,7 @@ class OrchestratorState(TypedDict):
 
 MAX_TOTAL_STEPS = 50
 ORCHESTRATOR_TIMEOUT = 600  # 10 minutes
+AGENT_ORDER = ["planner", "research", "data", "synthesis"]
 # MAX_TOOL_CALLS = 100
 
 
@@ -232,6 +234,82 @@ def route_from_data(state: OrchestratorState) -> str:
     return "synthesis"
 
 
+async def re_plan(state: OrchestratorState) -> OrchestratorState:
+    """If an agent failed, try to re-plan with the LLM."""
+    if not state.get("error"):
+        return state
+
+    logger.info(
+        "Orchestrator: re-planning after error in %s: %s",
+        state.get("current_agent"),
+        state.get("error"),
+    )
+
+    try:
+        provider = get_llm_provider()
+        prompt = (
+            f"The agent '{state.get('current_agent')}' failed with error:\n"
+            f"{state.get('error')}\n\n"
+            f"Original task: {state.get('task_description')}\n"
+            f"Objective: {state.get('objective')}\n\n"
+            "Respond in JSON only with this structure:\n"
+            '{"decision": "retry"|"skip"|"abort", "reason": "..."}\n'
+            '- "retry": re-run the failed agent\n'
+            '- "skip": skip the failed agent and continue\n'
+            '- "abort": cannot recover, stop'
+        )
+        response = await provider.generate(
+            prompt=prompt,
+            system="You are a re-planning assistant. Respond only in JSON.",
+        )
+        import json
+
+        data = json.loads(response.strip())
+        decision = data.get("decision", "abort")
+    except Exception:
+        logger.warning("Orchestrator: re_plan LLM failed, defaulting to abort")
+        decision = "abort"
+
+    if decision == "skip":
+        next_agent = _next_agent(state.get("current_agent", ""), state)
+        return {
+            **state,
+            "error": None,
+            "current_agent": next_agent,
+        }
+    elif decision == "retry":
+        return {
+            **state,
+            "error": None,
+        }
+    return state  # abort — keep error
+
+
+def _next_agent(current: str, state: OrchestratorState) -> str:
+    """Returns the next agent after `current` in the pipeline."""
+    if current not in AGENT_ORDER:
+        return "synthesis"
+    idx = AGENT_ORDER.index(current)
+    if idx >= len(AGENT_ORDER) - 1:
+        return "synthesis"
+    if current == "research" and not _check_if_data_needed(state):
+        return "synthesis"
+    return AGENT_ORDER[idx + 1]
+
+
+def route_after_replan(state: OrchestratorState) -> str:
+    """Route after re_plan to the appropriate node."""
+    if state.get("error"):
+        return "end"
+    mapping = {
+        "planner": "run_planner",
+        "research": "run_research",
+        "data": "run_data",
+        "synthesis": "run_synthesis",
+    }
+    return mapping.get(state.get("current_agent", ""), "end")
+
+
 def check_max_steps(state: OrchestratorState) -> str:
     """Prevents infinite loops."""
     if state.get("total_steps", 0) >= MAX_TOTAL_STEPS:
@@ -248,6 +326,7 @@ def build_orchestrator_graph() -> StateGraph:
     workflow.add_node("run_research", run_research)
     workflow.add_node("run_data", run_data)
     workflow.add_node("run_synthesis", run_synthesis)
+    workflow.add_node("re_plan", re_plan)
 
     # Set entry point
     workflow.set_entry_point("run_planner")
@@ -256,17 +335,28 @@ def build_orchestrator_graph() -> StateGraph:
     workflow.add_conditional_edges(
         "run_planner",
         route_from_planner,
-        {"research": "run_research", "error": END},
+        {"research": "run_research", "error": "re_plan"},
     )
     workflow.add_conditional_edges(
         "run_research",
         route_from_research,
-        {"data": "run_data", "synthesis": "run_synthesis", "error": END},
+        {"data": "run_data", "synthesis": "run_synthesis", "error": "re_plan"},
     )
     workflow.add_conditional_edges(
         "run_data",
         route_from_data,
-        {"synthesis": "run_synthesis", "error": END},
+        {"synthesis": "run_synthesis", "error": "re_plan"},
+    )
+    workflow.add_conditional_edges(
+        "re_plan",
+        route_after_replan,
+        {
+            "run_planner": "run_planner",
+            "run_research": "run_research",
+            "run_data": "run_data",
+            "run_synthesis": "run_synthesis",
+            "end": END,
+        },
     )
     workflow.add_edge("run_synthesis", END)
 

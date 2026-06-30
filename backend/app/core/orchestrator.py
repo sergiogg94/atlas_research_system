@@ -159,9 +159,31 @@ def _check_if_data_needed(state: OrchestratorState) -> bool:
     return False
 
 
-def _build_data_context(state: OrchestratorState) -> OrchestratorState:
+def _build_data_context(state: OrchestratorState) -> str:
     """Generates the context for the Data Agent."""
-    pass
+    parts = [f"# Objective\n{state.get('objective', '')}\n"]
+
+    if state.get("plan"):
+        plan = state["plan"]
+        parts.append(f"# Plan\n{plan.get('description', '')}\n")
+
+    findings = state.get("research_findings") or []
+    if findings:
+        lines = ["# Research Findings\n"]
+        for f in findings:
+            step = f.get("step", "?")
+            query = f.get("query", "")
+            summary = f.get("summary", "")
+            lines.append(f"## Step {step}")
+            if query:
+                lines.append(f"Query: {query}")
+            lines.append(f"Summary: {summary}")
+        parts.append("\n".join(lines))
+
+    context = "\n".join(parts)
+    if len(context) > 5000:
+        context = context[:5000] + "\n\n[Context truncated...]"
+    return context
 
 
 @with_checkpoint

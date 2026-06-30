@@ -1,10 +1,12 @@
 from typing import Optional, TypedDict
+from uuid import uuid4
 
 from app.core.agents.data import build_data_graph
 from app.core.agents.planner import build_planner_graph
 from app.core.agents.research import build_research_graph
 from app.core.agents.synthesis import build_synthesis_graph
 from app.core.logging import logger
+from app.core.state_manager import state_manager
 from langgraph.graph import END, StateGraph
 
 
@@ -29,6 +31,27 @@ ORCHESTRATOR_TIMEOUT = 600  # 10 minutes
 # MAX_TOOL_CALLS = 100
 
 
+async def save_checkpoint(state: OrchestratorState) -> OrchestratorState:
+    """Persists the current state in Redis"""
+    checkpoint_id = state.get("checkpoint_id") or str(uuid4())
+    await state_manager.save_research_state(checkpoint_id, dict(state))
+    return {**state, "checkpoint_id": checkpoint_id}
+
+
+def with_checkpoint(node_func):
+    """Wrapper that persists state after each node."""
+
+    async def wrapped(state):
+        result = await node_func(state)
+        if result.get("checkpoint_id"):
+            await state_manager.save_research_state(
+                result["checkpoint_id"], dict(result)
+            )
+        return result
+
+    return wrapped
+
+
 async def run_planner(state: OrchestratorState) -> OrchestratorState:
     """Invoke the Planner Agent to break down the task."""
     if state.get("error"):
@@ -46,16 +69,22 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
         return {**state, "error": f"Planner failed: {result['error']}"}
 
     plan = result["plan"]
-    return {
-        **state,
-        "plan": plan,
-        "objective": plan.get("objective", ""),
-        "plan_steps": plan.get("steps", []),
-        "current_agent": "planner",
-        "total_steps": state.get("total_steps", 0) + 1,
-    }
+
+    state = await save_checkpoint(
+        {
+            **state,
+            "plan": plan,
+            "objective": plan.get("objective", ""),
+            "plan_steps": plan.get("steps", []),
+            "current_agent": "planner",
+            "total_steps": state.get("total_steps", 0) + 1,
+        }
+    )
+
+    return state
 
 
+@with_checkpoint
 async def run_research(state: OrchestratorState) -> OrchestratorState:
     """Invoke the Research Agent with the plan steps."""
     if state.get("error") or not state.get("plan_steps"):
@@ -80,6 +109,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
     }
 
 
+@with_checkpoint
 async def run_data(state: OrchestratorState) -> OrchestratorState:
     """Invoke Data Agent if the plan includes data analysis."""
     if state.get("error"):
@@ -134,6 +164,7 @@ def _build_data_context(state: OrchestratorState) -> OrchestratorState:
     pass
 
 
+@with_checkpoint
 async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
     """Invoke Synthesis Agent with all results."""
     logger.info("Orchestrator: running synthesis agent")

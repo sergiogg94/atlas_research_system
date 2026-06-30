@@ -6,6 +6,7 @@ from app.core.prompts.data import (
 )
 from app.core.prompts.planner import PlannerSystemPrompt, PlannerUserPrompt
 from app.core.prompts.research import ResearchSystemPrompt, ResearchUserPrompt
+from app.core.prompts.synthesis import SynthesisSystemPrompt, SynthesisUserPrompt
 
 _PROMPTS: dict[str, type] = {
     "planner_system": PlannerSystemPrompt,
@@ -16,6 +17,8 @@ _PROMPTS: dict[str, type] = {
     "data_analysis_user": AnalysisUserPrompt,
     "data_code_gen_system": CodeGenSystemPrompt,
     "data_code_gen_user": CodeGenUserPrompt,
+    "synthesis_system": SynthesisSystemPrompt,
+    "synthesis_user": SynthesisUserPrompt,
 }
 
 

@@ -15,11 +15,11 @@ router = APIRouter()
     description="Generate a plan based on the provided request.",
 )
 async def create_plan(request: PlanRequest):
-    graph = build_planner_graph()
     logger.info(
         "Received plan request: task_description_len=%d",
         len(request.task_description),
     )
+    graph = build_planner_graph()
 
     try:
         result = await graph.ainvoke(

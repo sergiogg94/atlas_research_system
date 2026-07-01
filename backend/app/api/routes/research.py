@@ -15,12 +15,12 @@ router = APIRouter()
     description="Research an objective using the Research Agent, which performs a series of steps to gather information and insights.",
 )
 async def create_plan(request: ResearchRequest):
-    graph = build_research_graph()
     logger.info(
         "Received research request: objective_len=%d, steps_count=%d",
         len(request.objective),
         len(request.steps),
     )
+    graph = build_research_graph()
 
     try:
         result = await asyncio.wait_for(

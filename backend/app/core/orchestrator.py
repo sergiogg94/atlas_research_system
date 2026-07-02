@@ -24,7 +24,7 @@ class OrchestratorState(TypedDict):
     step_index: int  # Current step index
     total_steps: int  # Total of executed steps
     max_steps: int  # Scecurity limit
-    checkpoint_id: Optional[str]  # Redis checkpoint id
+    checkpoint_idx: Optional[str]  # Redis checkpoint id
     consecutive_failures: int  # Degradation detection
     last_failure_agent: Optional[str]  # Last agent that failed
 
@@ -36,9 +36,56 @@ AGENT_ORDER = ["planner", "research", "data", "synthesis"]
 
 async def save_checkpoint(state: OrchestratorState) -> OrchestratorState:
     """Persists the current state in Redis"""
-    checkpoint_id = state.get("checkpoint_id") or str(uuid4())
-    await state_manager.save_research_state(checkpoint_id, dict(state))
-    return {**state, "checkpoint_id": checkpoint_id}
+    checkpoint_idx = state.get("checkpoint_idx") or str(uuid4())
+
+    # Asegurar que todo sea JSON-serializable
+    clean_state = _sanitize_for_json(dict(state))
+
+    try:
+        await state_manager.save_orchestrator_state(checkpoint_idx, clean_state)
+    except Exception as e:
+        logger.error("Failed to save checkpoint: %s", e)
+        return {**state, "error": f"Checkpoint save failed: {e}"}
+
+    return {**state, "checkpoint_idx": checkpoint_idx}
+
+
+def _sanitize_for_json(obj: dict) -> dict:
+    """Recursively converts non-JSON-serializable objects to strings/dicts"""
+    import json
+
+    try:
+        # Intentar serializar - si falla, sanitizar
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        pass
+
+    # Limpiar recursivamente
+    cleaned = {}
+    for key, value in obj.items():
+        if value is None or isinstance(value, (str, int, float, bool)):
+            cleaned[key] = value
+        elif isinstance(value, dict):
+            cleaned[key] = _sanitize_for_json(value)
+        elif isinstance(value, (list, tuple)):
+            cleaned[key] = [
+                (
+                    _sanitize_for_json(item)
+                    if isinstance(item, dict)
+                    else (
+                        str(item)
+                        if not isinstance(item, (str, int, float, bool))
+                        else item
+                    )
+                )
+                for item in value
+            ]
+        else:
+            # Objetos no serializables → convertir a string
+            cleaned[key] = str(value)
+
+    return cleaned
 
 
 def with_checkpoint(node_func):
@@ -46,9 +93,9 @@ def with_checkpoint(node_func):
 
     async def wrapped(state):
         result = await node_func(state)
-        if result.get("checkpoint_id"):
-            await state_manager.save_research_state(
-                result["checkpoint_id"], dict(result)
+        if result.get("checkpoint_idx"):
+            await state_manager.save_orchestrator_state(
+                result["checkpoint_idx"], dict(result)
             )
         return result
 
@@ -71,7 +118,7 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
     if result.get("error"):
         return {**state, "error": f"Planner failed: {result['error']}"}
 
-    plan = result["plan"]
+    plan = result["plan"].model_dump()
 
     state = await save_checkpoint(
         {
@@ -168,7 +215,7 @@ def _build_data_context(state: OrchestratorState) -> str:
 
     if state.get("plan"):
         plan = state["plan"]
-        parts.append(f"# Plan\n{plan.get('description', '')}\n")
+        parts.append(f"# Plan\n{plan.get('objective', '')}\n")
 
     findings = state.get("research_findings") or []
     if findings:
@@ -411,4 +458,10 @@ def build_orchestrator_graph() -> StateGraph:
     )
     workflow.add_edge("run_synthesis", END)
 
-    return workflow.compile()
+    try:
+        compiled = workflow.compile()
+        logger.info("Orchestrator StateGraph compiled successfully")
+        return compiled
+    except Exception as e:
+        logger.exception("Failed to compile orchestrator StateGraph: %s", e)
+        raise

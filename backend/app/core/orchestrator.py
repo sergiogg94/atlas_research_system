@@ -25,12 +25,13 @@ class OrchestratorState(TypedDict):
     total_steps: int  # Total of executed steps
     max_steps: int  # Scecurity limit
     checkpoint_id: Optional[str]  # Redis checkpoint id
+    consecutive_failures: int  # Degradation detection
+    last_failure_agent: Optional[str]  # Last agent that failed
 
 
 MAX_TOTAL_STEPS = 50
-ORCHESTRATOR_TIMEOUT = 600  # 10 minutes
+DEGRADATION_THRESHOLD = 3
 AGENT_ORDER = ["planner", "research", "data", "synthesis"]
-# MAX_TOOL_CALLS = 100
 
 
 async def save_checkpoint(state: OrchestratorState) -> OrchestratorState:
@@ -276,11 +277,18 @@ async def re_plan(state: OrchestratorState) -> OrchestratorState:
             **state,
             "error": None,
             "current_agent": next_agent,
+            "consecutive_failures": 0,
+            "last_failure_agent": None,
         }
     elif decision == "retry":
+        same_agent = state.get("last_failure_agent") == state.get("current_agent")
         return {
             **state,
             "error": None,
+            "consecutive_failures": (
+                state.get("consecutive_failures", 0) + 1 if same_agent else 1
+            ),
+            "last_failure_agent": state.get("current_agent"),
         }
     return state  # abort — keep error
 
@@ -310,11 +318,47 @@ def route_after_replan(state: OrchestratorState) -> str:
     return mapping.get(state.get("current_agent", ""), "end")
 
 
-def check_max_steps(state: OrchestratorState) -> str:
-    """Prevents infinite loops."""
+async def check_degradation(state: OrchestratorState) -> OrchestratorState:
+    """Detects degradation: abort after multiple consecutive failures on the same agent."""
+    if state.get("consecutive_failures", 0) >= DEGRADATION_THRESHOLD:
+        logger.warning(
+            "Degradation detected: %d consecutive failures on agent '%s'",
+            state["consecutive_failures"],
+            state.get("current_agent", "?"),
+        )
+        return {
+            **state,
+            "error": (
+                f"Aborting after {state['consecutive_failures']} consecutive failures "
+                f"on agent '{state.get('current_agent', '?')}'"
+            ),
+        }
+    return state
+
+
+async def check_max_steps(state: OrchestratorState) -> OrchestratorState:
+    """Prevents infinite loops by stopping at MAX_TOTAL_STEPS."""
     if state.get("total_steps", 0) >= MAX_TOTAL_STEPS:
-        return "max_steps_reached"
-    return "continue"
+        logger.warning("Max steps reached (%d)", MAX_TOTAL_STEPS)
+        return {**state, "error": f"Execution limit reached: {MAX_TOTAL_STEPS} steps"}
+    return state
+
+
+def route_after_check(state: OrchestratorState) -> str:
+    """Route after the max-steps check to the appropriate next node."""
+    if state.get("error"):
+        if "limit reached" in state.get("error", ""):
+            return "end"
+        return "re_plan"
+
+    from_agent = state.get("current_agent", "")
+    if from_agent == "planner":
+        return route_from_planner(state)
+    elif from_agent == "research":
+        return route_from_research(state)
+    elif from_agent == "data":
+        return route_from_data(state)
+    return "end"
 
 
 def build_orchestrator_graph() -> StateGraph:
@@ -327,28 +371,35 @@ def build_orchestrator_graph() -> StateGraph:
     workflow.add_node("run_data", run_data)
     workflow.add_node("run_synthesis", run_synthesis)
     workflow.add_node("re_plan", re_plan)
+    workflow.add_node("check_max_steps", check_max_steps)
+    workflow.add_node("check_degradation", check_degradation)
 
     # Set entry point
     workflow.set_entry_point("run_planner")
 
-    # Define edges
+    # Define edges — each agent node goes through the max-steps check
+    workflow.add_edge("run_planner", "check_max_steps")
+    workflow.add_edge("run_research", "check_max_steps")
+    workflow.add_edge("run_data", "check_max_steps")
+
     workflow.add_conditional_edges(
-        "run_planner",
-        route_from_planner,
-        {"research": "run_research", "error": "re_plan"},
+        "check_max_steps",
+        route_after_check,
+        {
+            "research": "run_research",
+            "data": "run_data",
+            "synthesis": "run_synthesis",
+            "error": "re_plan",
+            "re_plan": "re_plan",
+            "end": END,
+        },
     )
+
+    # re_plan → degradation check → route back to an agent or END
+    workflow.add_edge("re_plan", "check_degradation")
+
     workflow.add_conditional_edges(
-        "run_research",
-        route_from_research,
-        {"data": "run_data", "synthesis": "run_synthesis", "error": "re_plan"},
-    )
-    workflow.add_conditional_edges(
-        "run_data",
-        route_from_data,
-        {"synthesis": "run_synthesis", "error": "re_plan"},
-    )
-    workflow.add_conditional_edges(
-        "re_plan",
+        "check_degradation",
         route_after_replan,
         {
             "run_planner": "run_planner",

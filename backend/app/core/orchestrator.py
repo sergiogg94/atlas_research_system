@@ -6,7 +6,7 @@ from app.core.agents.planner import build_planner_graph
 from app.core.agents.research import build_research_graph
 from app.core.agents.synthesis import build_synthesis_graph
 from app.core.llm.factory import get_llm_provider
-from app.core.logging import logger
+from app.core.logging import logger, trace_context
 from app.core.state_manager import state_manager
 from langgraph.graph import END, StateGraph
 
@@ -108,31 +108,32 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
     if state.get("error"):
         return state
 
-    logger.info("Orchestrator: running planner agent")
-    graph = build_planner_graph()
-    result = await graph.ainvoke(
-        {
-            "task_description": state["task_description"],
-        }
-    )
+    with trace_context(state.get("trace_id", ""), "planner"):
+        logger.info("Orchestrator: running planner agent")
+        graph = build_planner_graph()
+        result = await graph.ainvoke(
+            {
+                "task_description": state["task_description"],
+            }
+        )
 
-    if result.get("error"):
-        return {**state, "error": f"Planner failed: {result['error']}"}
+        if result.get("error"):
+            return {**state, "error": f"Planner failed: {result['error']}"}
 
-    plan = result["plan"].model_dump()
+        plan = result["plan"].model_dump()
 
-    state = await save_checkpoint(
-        {
-            **state,
-            "plan": plan,
-            "objective": plan.get("objective", ""),
-            "plan_steps": plan.get("steps", []),
-            "current_agent": "planner",
-            "total_steps": state.get("total_steps", 0) + 1,
-        }
-    )
+        state = await save_checkpoint(
+            {
+                **state,
+                "plan": plan,
+                "objective": plan.get("objective", ""),
+                "plan_steps": plan.get("steps", []),
+                "current_agent": "planner",
+                "total_steps": state.get("total_steps", 0) + 1,
+            }
+        )
 
-    return state
+        return state
 
 
 @with_checkpoint
@@ -141,23 +142,24 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
     if state.get("error") or not state.get("plan_steps"):
         return state
 
-    logger.info("Orchestrator: running research agent")
-    graph = build_research_graph()
-    result = await graph.ainvoke(
-        {
-            "objective": state["objective"],
-            "steps": state["plan_steps"],
-            "current_step": 0,
-            "findings": [],
-        }
-    )
+    with trace_context(state.get("trace_id", ""), "research"):
+        logger.info("Orchestrator: running research agent")
+        graph = build_research_graph()
+        result = await graph.ainvoke(
+            {
+                "objective": state["objective"],
+                "steps": state["plan_steps"],
+                "current_step": 0,
+                "findings": [],
+            }
+        )
 
-    return {
-        **state,
-        "research_findings": result.get("findings", []),
-        "current_agent": "research",
-        "total_steps": state.get("total_steps", 0) + len(state.get("plan_steps", [])),
-    }
+        return {
+            **state,
+            "research_findings": result.get("findings", []),
+            "current_agent": "research",
+            "total_steps": state.get("total_steps", 0) + len(state.get("plan_steps", [])),
+        }
 
 
 @with_checkpoint
@@ -166,27 +168,28 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
     if state.get("error"):
         return state
 
-    needs_data = _check_if_data_needed(state)
-    if not needs_data:
-        logger.info("Orchestrator: skipping data agent (not needed)")
-        return state
+    with trace_context(state.get("trace_id", ""), "data"):
+        needs_data = _check_if_data_needed(state)
+        if not needs_data:
+            logger.info("Orchestrator: skipping data agent (not needed)")
+            return state
 
-    logger.info("Orchestrator: running data agent")
-    graph = build_data_graph()
-    result = await graph.ainvoke(
-        {
-            "task": state["objective"],
-            "context": _build_data_context(state),
-            "iteration": 0,
+        logger.info("Orchestrator: running data agent")
+        graph = build_data_graph()
+        result = await graph.ainvoke(
+            {
+                "task": state["objective"],
+                "context": _build_data_context(state),
+                "iteration": 0,
+            }
+        )
+
+        return {
+            **state,
+            "data_results": result.get("execution_result"),
+            "current_agent": "data",
+            "total_steps": state.get("total_steps", 0) + 1,
         }
-    )
-
-    return {
-        **state,
-        "data_results": result.get("execution_result"),
-        "current_agent": "data",
-        "total_steps": state.get("total_steps", 0) + 1,
-    }
 
 
 def _check_if_data_needed(state: OrchestratorState) -> bool:
@@ -240,24 +243,25 @@ def _build_data_context(state: OrchestratorState) -> str:
 @with_checkpoint
 async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
     """Invoke Synthesis Agent with all results."""
-    logger.info("Orchestrator: running synthesis agent")
-    graph = build_synthesis_graph()
-    result = await graph.ainvoke(
-        {
-            "objective": state["objective"],
-            "task_description": state["task_description"],
-            "plan": state.get("plan"),
-            "research_findings": state.get("research_findings"),
-            "data_results": state.get("data_results"),
-        }
-    )
+    with trace_context(state.get("trace_id", ""), "synthesis"):
+        logger.info("Orchestrator: running synthesis agent")
+        graph = build_synthesis_graph()
+        result = await graph.ainvoke(
+            {
+                "objective": state["objective"],
+                "task_description": state["task_description"],
+                "plan": state.get("plan"),
+                "research_findings": state.get("research_findings"),
+                "data_results": state.get("data_results"),
+            }
+        )
 
-    return {
-        **state,
-        "report": result.get("report"),
-        "current_agent": "synthesis",
-        "total_steps": state.get("total_steps", 0) + 1,
-    }
+        return {
+            **state,
+            "report": result.get("report"),
+            "current_agent": "synthesis",
+            "total_steps": state.get("total_steps", 0) + 1,
+        }
 
 
 def route_from_planner(state: OrchestratorState) -> str:
@@ -288,57 +292,58 @@ async def re_plan(state: OrchestratorState) -> OrchestratorState:
     if not state.get("error"):
         return state
 
-    logger.info(
-        "Orchestrator: re-planning after error in %s: %s",
-        state.get("current_agent"),
-        state.get("error"),
-    )
-
-    try:
-        provider = get_llm_provider()
-        prompt = (
-            f"The agent '{state.get('current_agent')}' failed with error:\n"
-            f"{state.get('error')}\n\n"
-            f"Original task: {state.get('task_description')}\n"
-            f"Objective: {state.get('objective')}\n\n"
-            "Respond in JSON only with this structure:\n"
-            '{"decision": "retry"|"skip"|"abort", "reason": "..."}\n'
-            '- "retry": re-run the failed agent\n'
-            '- "skip": skip the failed agent and continue\n'
-            '- "abort": cannot recover, stop'
+    with trace_context(state.get("trace_id", ""), "re_plan"):
+        logger.info(
+            "Orchestrator: re-planning after error in %s: %s",
+            state.get("current_agent"),
+            state.get("error"),
         )
-        response = await provider.generate(
-            prompt=prompt,
-            system="You are a re-planning assistant. Respond only in JSON.",
-        )
-        import json
 
-        data = json.loads(response.strip())
-        decision = data.get("decision", "abort")
-    except Exception:
-        logger.warning("Orchestrator: re_plan LLM failed, defaulting to abort")
-        decision = "abort"
+        try:
+            provider = get_llm_provider()
+            prompt = (
+                f"The agent '{state.get('current_agent')}' failed with error:\n"
+                f"{state.get('error')}\n\n"
+                f"Original task: {state.get('task_description')}\n"
+                f"Objective: {state.get('objective')}\n\n"
+                "Respond in JSON only with this structure:\n"
+                '{"decision": "retry"|"skip"|"abort", "reason": "..."}\n'
+                '- "retry": re-run the failed agent\n'
+                '- "skip": skip the failed agent and continue\n'
+                '- "abort": cannot recover, stop'
+            )
+            response = await provider.generate(
+                prompt=prompt,
+                system="You are a re-planning assistant. Respond only in JSON.",
+            )
+            import json
 
-    if decision == "skip":
-        next_agent = _next_agent(state.get("current_agent", ""), state)
-        return {
-            **state,
-            "error": None,
-            "current_agent": next_agent,
-            "consecutive_failures": 0,
-            "last_failure_agent": None,
-        }
-    elif decision == "retry":
-        same_agent = state.get("last_failure_agent") == state.get("current_agent")
-        return {
-            **state,
-            "error": None,
-            "consecutive_failures": (
-                state.get("consecutive_failures", 0) + 1 if same_agent else 1
-            ),
-            "last_failure_agent": state.get("current_agent"),
-        }
-    return state  # abort — keep error
+            data = json.loads(response.strip())
+            decision = data.get("decision", "abort")
+        except Exception:
+            logger.warning("Orchestrator: re_plan LLM failed, defaulting to abort")
+            decision = "abort"
+
+        if decision == "skip":
+            next_agent = _next_agent(state.get("current_agent", ""), state)
+            return {
+                **state,
+                "error": None,
+                "current_agent": next_agent,
+                "consecutive_failures": 0,
+                "last_failure_agent": None,
+            }
+        elif decision == "retry":
+            same_agent = state.get("last_failure_agent") == state.get("current_agent")
+            return {
+                **state,
+                "error": None,
+                "consecutive_failures": (
+                    state.get("consecutive_failures", 0) + 1 if same_agent else 1
+                ),
+                "last_failure_agent": state.get("current_agent"),
+            }
+        return state  # abort — keep error
 
 
 def _next_agent(current: str, state: OrchestratorState) -> str:
@@ -368,28 +373,30 @@ def route_after_replan(state: OrchestratorState) -> str:
 
 async def check_degradation(state: OrchestratorState) -> OrchestratorState:
     """Detects degradation: abort after multiple consecutive failures on the same agent."""
-    if state.get("consecutive_failures", 0) >= DEGRADATION_THRESHOLD:
-        logger.warning(
-            "Degradation detected: %d consecutive failures on agent '%s'",
-            state["consecutive_failures"],
-            state.get("current_agent", "?"),
-        )
-        return {
-            **state,
-            "error": (
-                f"Aborting after {state['consecutive_failures']} consecutive failures "
-                f"on agent '{state.get('current_agent', '?')}'"
-            ),
-        }
-    return state
+    with trace_context(state.get("trace_id", ""), "degradation_check"):
+        if state.get("consecutive_failures", 0) >= DEGRADATION_THRESHOLD:
+            logger.warning(
+                "Degradation detected: %d consecutive failures on agent '%s'",
+                state["consecutive_failures"],
+                state.get("current_agent", "?"),
+            )
+            return {
+                **state,
+                "error": (
+                    f"Aborting after {state['consecutive_failures']} consecutive failures "
+                    f"on agent '{state.get('current_agent', '?')}'"
+                ),
+            }
+        return state
 
 
 async def check_max_steps(state: OrchestratorState) -> OrchestratorState:
     """Prevents infinite loops by stopping at MAX_TOTAL_STEPS."""
-    if state.get("total_steps", 0) >= MAX_TOTAL_STEPS:
-        logger.warning("Max steps reached (%d)", MAX_TOTAL_STEPS)
-        return {**state, "error": f"Execution limit reached: {MAX_TOTAL_STEPS} steps"}
-    return state
+    with trace_context(state.get("trace_id", ""), "max_steps_check"):
+        if state.get("total_steps", 0) >= MAX_TOTAL_STEPS:
+            logger.warning("Max steps reached (%d)", MAX_TOTAL_STEPS)
+            return {**state, "error": f"Execution limit reached: {MAX_TOTAL_STEPS} steps"}
+        return state
 
 
 def route_after_check(state: OrchestratorState) -> str:

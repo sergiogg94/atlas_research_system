@@ -141,3 +141,38 @@ This week completed the core data-processing layer of the multi-agent system. Th
 3. **Mocking LangGraph for tests** — Patching `get_llm_provider` and `get_tool` at the module level (where they are imported) lets tests run the full graph without a real LLM or external services. `FakeLLMProvider` with controllable responses enables precise path coverage.
 4. **Conditional edges are the agent's decision logic** — The `needs_sql` and `has_error` routing functions in the Data Agent mirror real decision-making. Testing these functions in isolation (unit tests) before running the full graph catches routing bugs early.
 5. **Prompt engineering for code generation** — The data code-gen prompts include the previous error message on retry, which significantly improves the LLM's ability to self-correct. Explicit safety rules in the system prompt reduce hallucinated dangerous code.
+
+---
+
+## Week 5: Synthesis Agent & Multi-Agent Orchestration
+
+### Summary
+Implemented the final piece of agent orchestration: the Synthesis Agent that consolidates findings from all upstream agents into structured reports, plus a master Orchestrator graph that connects Planner → Research → Data → Synthesis in a single pipeline. Added Redis checkpoints for state persistence across nodes, an LLM-driven re-planning mechanism that recovers from agent failures (retry/skip/abort), and safety limits (max steps, degradation detection) to prevent runaway execution. Exposed the full pipeline via `POST /api/v1/execute-task` with a 10-minute timeout.
+
+### Key Deliverables
+- **Synthesis Agent** — LangGraph `StateGraph` with 3 nodes (`collect_results` → `generate_synthesis` → `validate_report`), conditional retry loop (max 3 iterations), and versioned prompts (`synthesis_system` v1.0.0, `synthesis_user` v1.0.0)
+- **Master Orchestrator** — `StateGraph` with 7 nodes: 4 agent nodes (`run_planner`, `run_research`, `run_data`, `run_synthesis`), 2 safety nodes (`check_max_steps`, `check_degradation`), and 1 recovery node (`re_plan`). Conditional routing via `route_from_planner/research/data` and `route_after_replan`
+- **Redis checkpoints** — `save_checkpoint` with `_sanitize_for_json` helper and `with_checkpoint` decorator; state persisted after each agent node via `StateManager.save_orchestrator_state`
+- **Re-planning** — LLM-based decision node (`re_plan`) that parses JSON `{"decision": "retry"|"skip"|"abort"}`; degradation detection aborts after 3 consecutive failures on the same agent
+- **Data Agent context builder** — `_build_data_context` that assembles research findings and plan context for the Data Agent, with truncation at 5000 chars
+- **Endpoint `POST /api/v1/execute-task`** — Accepts `ExecuteTaskRequest` (task_description: 10–2000 chars), runs full orchestrator graph with 600s `asyncio.wait_for`, returns `ExecuteTaskResponse` with objective, plan, research findings, data results, report, error, and total_steps
+- **Orchestrator schemas** — `ExecuteTaskRequest`, `ExecuteTaskResponse` with `BaseResponse` envelope
+- **Test suite** — 6 tests in `test_orchestrator.py` covering planner node, full mocked pipeline, data-agent skipping, LLM-based re-planning, max-steps enforcement, and checkpoint persistence
+- **Documentation** — `docs/orchestrator_graph.md` with Mermaid diagram, state table, node descriptions, and edge matrix
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| Orchestrator as master StateGraph | Encapsulates the entire multi-agent pipeline in a single compiled graph; each agent is a node, enabling unified control flow, error handling, and state persistence |
+| Two safety layers (max_steps + degradation) | `check_max_steps` prevents infinite loops (hard limit at 50); `check_degradation` detects cascading failures (soft limit at 3 consecutive) and aborts before wasting LLM calls |
+| LLM-based re-planning over hardcoded fallback | The LLM decides whether to retry, skip, or abort based on error context — more flexible than static routing; JSON response parsed for reliability |
+| Checkpoints after every agent node | Redis persistence via `save_checkpoint` enables debugging, recovery, and audit of long-running executions; the `_sanitize_for_json` step prevents serialization failures from non-JSON-safe state fields |
+| `with_checkpoint` decorator | Applied transparently to agent nodes without modifying their internal logic; keeps checkpointing separate from business logic |
+| Synthesis retry loop (max 3) | Self-healing: the LLM receives previous validation errors and regenerates the report. After 3 failed attempts, the graph terminates gracefully rather than looping forever |
+
+### Key Learnings
+1. **Orchestrator as composition over inheritance** — Each agent is a standalone `StateGraph`, and the orchestrator invokes them as sub-graphs. This keeps agents independently testable and the orchestrator focused on routing and safety.
+2. **Checkpoint trade-offs** — Persisting state after every node adds latency (~5–10ms per Redis write) but provides valuable debugging and recovery capability. The `_sanitize_for_json` step is essential because LangGraph state can contain non-serializable objects (e.g., Pydantic models).
+3. **LLM-based re-planning is powerful but fragile** — The LLM correctly decides retry/skip/abort in most cases, but malformed JSON responses require a try/except fallback. Adding few-shot examples to the prompt would improve reliability.
+4. **Safety layers must be tested explicitly** — `test_max_steps_limit` and `test_replan_on_error` catch edge cases that would otherwise cause infinite loops or silent failures in production. These tests are cheap to write and invaluable for confidence.
+5. **Graph compilation errors surface structural issues** — The orchestrator graph compilation (7 nodes, 9+ edges) revealed mismatches between routing function return values and edge destination names. Compilation-time validation in LangGraph catches these before runtime.

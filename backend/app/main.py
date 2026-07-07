@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from app.api.routes import data, health, llm, orchestrator, plan, research
 from app.core.logging import logger
+from app.core.middleware import TraceIDMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -22,6 +23,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(TraceIDMiddleware)
 
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(llm.router, prefix="/api/v1", tags=["llm"])

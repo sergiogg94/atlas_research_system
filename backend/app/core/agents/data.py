@@ -16,6 +16,7 @@ class DataState(TypedDict):
     error: Optional[str]
     iteration: int  # Iteration counter (max 3)
     analysis: Optional[str]  # Result of the analysis
+    trace_id: str
 
 
 async def analyze_task(state: DataState) -> DataState:

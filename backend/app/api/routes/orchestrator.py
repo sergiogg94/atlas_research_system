@@ -1,7 +1,7 @@
 import asyncio
 from uuid import uuid4
 
-from app.core.logging import logger
+from app.core.logging import logger, trace_id_var
 from app.core.orchestrator import MAX_TOTAL_STEPS, build_orchestrator_graph
 from app.schemas.orchestrator import ExecuteTaskRequest, ExecuteTaskResponse
 from fastapi import APIRouter, HTTPException
@@ -16,6 +16,7 @@ router = APIRouter()
     description="Orchestrates Planner, research, data and synthesis agents",
 )
 async def execute_task(request: ExecuteTaskRequest):
+    trace_id = trace_id_var.get() or str(uuid4())
     task_id = str(uuid4())
     logger.info("Starting task %s: %s", task_id, request.task_description[:100])
 
@@ -28,6 +29,7 @@ async def execute_task(request: ExecuteTaskRequest):
                     "step_index": 0,
                     "total_steps": 0,
                     "max_steps": MAX_TOTAL_STEPS,
+                    "trace_id": trace_id,
                 }
             ),
             timeout=600.0,

@@ -27,6 +27,7 @@ class OrchestratorState(TypedDict):
     checkpoint_idx: Optional[str]  # Redis checkpoint id
     consecutive_failures: int  # Degradation detection
     last_failure_agent: Optional[str]  # Last agent that failed
+    trace_id: str
 
 
 MAX_TOTAL_STEPS = 50

@@ -17,6 +17,7 @@ class SynthesisState(TypedDict):
     report: Optional[str]
     error: Optional[str]
     iteration: int
+    trace_id: str
 
 
 async def collect_results(state: SynthesisState) -> SynthesisState:

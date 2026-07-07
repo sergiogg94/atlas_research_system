@@ -17,6 +17,7 @@ class ResearchState(TypedDict):
     current_query: Optional[str]  # Current query being researched
     search_results: Optional[list]  # Results from web search
     scraped_contents: Optional[list]  # Scraped content from search results
+    trace_id: str
 
 
 async def parse_step(state: ResearchState) -> ResearchState:
@@ -104,20 +105,26 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
     sys_prompt = get_prompt("research_system")
     user_prompt = get_prompt("research_user")
 
-    search_results_text = "\n".join(
-        [
-            f"- {item.get('title', '')} | {item.get('href') or item.get('link', '')}"
-            for item in state.get("search_results", [])[:5]
-        ]
-    ) or "No search results available."
+    search_results_text = (
+        "\n".join(
+            [
+                f"- {item.get('title', '')} | {item.get('href') or item.get('link', '')}"
+                for item in state.get("search_results", [])[:5]
+            ]
+        )
+        or "No search results available."
+    )
 
     scraped_contents = state.get("scraped_contents") or []
-    scraped_contents_text = "\n\n".join(
-        [
-            f"URL: {content.get('url', '')}\nTitle: {content.get('title', '')}\nContent: {content.get('content', '')[:1000]}"
-            for content in scraped_contents
-        ]
-    ) or "No scraped content available."
+    scraped_contents_text = (
+        "\n\n".join(
+            [
+                f"URL: {content.get('url', '')}\nTitle: {content.get('title', '')}\nContent: {content.get('content', '')[:1000]}"
+                for content in scraped_contents
+            ]
+        )
+        or "No scraped content available."
+    )
 
     prompt_text = user_prompt.format(
         objective=state["objective"],
@@ -130,7 +137,9 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
     logger.debug("Research user prompt (truncated): %s", prompt_text[:500])
     summary = await provider.generate(prompt=prompt_text, system=sys_prompt.template)
 
-    logger.info("LLM generated research summary; length=%s", len(summary) if summary else 0)
+    logger.info(
+        "LLM generated research summary; length=%s", len(summary) if summary else 0
+    )
 
     finding = {
         "step": state["current_step"],

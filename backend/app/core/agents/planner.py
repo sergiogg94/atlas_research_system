@@ -14,6 +14,7 @@ class PlannerState(TypedDict):
     plan: Optional[Plan]
     error: Optional[str]
     llm_response: Optional[str]
+    trace_id: str
 
 
 def validate_task(state: PlannerState) -> PlannerState:

@@ -7,8 +7,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 backend_dir = os.path.dirname(script_dir)
 sys.path.insert(0, backend_dir)
 
-from app.core.database import init_db, engine
-from app.models import Task
+from app.core.database import engine, init_db
+from app.models import Execution, ExecutionStep, LLMCall, Task, ToolCallRecord
 
 
 async def main():

@@ -7,7 +7,7 @@ from app.core.agents.research import build_research_graph
 from app.core.agents.synthesis import build_synthesis_graph
 from app.core.execution_repository import execution_repository
 from app.core.llm.factory import get_llm_provider
-from app.core.logging import logger, trace_context
+from app.core.logging import logger, trace_context, trace_step
 from app.core.state_manager import state_manager
 from app.models.execution import ExecutionStatus
 from langgraph.graph import END, StateGraph
@@ -31,6 +31,7 @@ class OrchestratorState(TypedDict):
     last_failure_agent: Optional[str]  # Last agent that failed
     trace_id: str  # Unique trace id for logging and tracing
     execution_id: Optional[str]  # Database execution ID
+    last_step_latency_ms: Optional[int]  # Latency of last step in milliseconds
 
 
 MAX_TOTAL_STEPS = 50
@@ -150,6 +151,7 @@ async def _record_execution_step(
         return None
 
 
+@trace_step("planner")
 async def run_planner(state: OrchestratorState) -> OrchestratorState:
     """Invoke the Planner Agent to break down the task."""
     if state.get("error"):
@@ -226,6 +228,7 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
             input_summary=state.get("task_description"),
             output_summary=str(plan.get("objective", "")),
             status="completed",
+            latency_ms=state.get("last_step_latency_ms"),
         )
 
         state = await save_checkpoint(
@@ -249,6 +252,7 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
         return state
 
 
+@trace_step("research")
 @with_checkpoint
 async def run_research(state: OrchestratorState) -> OrchestratorState:
     """Invoke the Research Agent with the plan steps."""
@@ -329,6 +333,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
             input_summary=str(state.get("plan_steps", [])),
             output_summary=str(result.get("findings", [])),
             status="completed",
+            latency_ms=state.get("last_step_latency_ms"),
         )
 
         return {
@@ -340,6 +345,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
         }
 
 
+@trace_step("data")
 @with_checkpoint
 async def run_data(state: OrchestratorState) -> OrchestratorState:
     """Invoke Data Agent if the plan includes data analysis."""
@@ -424,6 +430,7 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
             input_summary=state.get("objective"),
             output_summary=str(result.get("execution_result", "")),
             status="completed",
+            latency_ms=state.get("last_step_latency_ms"),
         )
 
         return {
@@ -482,6 +489,7 @@ def _build_data_context(state: OrchestratorState) -> str:
     return context
 
 
+@trace_step("synthesis")
 @with_checkpoint
 async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
     """Invoke Synthesis Agent with all results."""
@@ -562,6 +570,7 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
             input_summary="Combining research and data findings",
             output_summary=str(result.get("report", "")),
             status="completed",
+            latency_ms=state.get("last_step_latency_ms"),
         )
 
         return {

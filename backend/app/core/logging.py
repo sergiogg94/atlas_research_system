@@ -20,6 +20,7 @@ def trace_context(trace_id: str, agent_name: str):
         trace_id_var.reset(token_trace)
         agent_name_var.reset(token_agent)
 
+
 settings = get_settings()
 
 
@@ -56,3 +57,40 @@ custom_dict = {
 logging.config.dictConfig(custom_dict)
 
 logger = logging.getLogger(__name__)
+
+
+def trace_step(agent_name: str):
+    """Decorator that logs latency and captures step telemetry for agent nodes."""
+    import functools
+    import time
+
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(state, *args, **kwargs):
+            trace_id = state.get("trace_id") or trace_id_var.get()
+            agent_name_var.set(agent_name)
+            start = time.monotonic()
+            try:
+                result = await func(state, *args, **kwargs)
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                logger.info(
+                    "%s completed in %dms",
+                    agent_name,
+                    elapsed_ms,
+                    extra={"latency_ms": elapsed_ms, "trace_id": trace_id},
+                )
+                return {**result, "last_step_latency_ms": elapsed_ms}
+            except Exception as e:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                logger.error(
+                    "%s failed after %dms: %s",
+                    agent_name,
+                    elapsed_ms,
+                    str(e),
+                    extra={"latency_ms": elapsed_ms, "trace_id": trace_id},
+                )
+                raise
+
+        return wrapper
+
+    return decorator

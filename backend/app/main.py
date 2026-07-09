@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from app.api.routes import data, health, llm, orchestrator, plan, research
+from app.api.routes import data, health, llm, orchestrator, plan, research, history
 from app.core.logging import logger
 from app.core.middleware import TraceIDMiddleware
 from fastapi import FastAPI
@@ -32,6 +32,7 @@ app.include_router(plan.router, prefix="/api/v1", tags=["plan"])
 app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(data.router, prefix="/api/v1", tags=["data"])
 app.include_router(orchestrator.router, prefix="/api/v1", tags=["orchestrator"])
+app.include_router(history.router, prefix="/api/v1", tags=["history"])
 
 logger.info(
     "Routers registered: /api/v1/health, /api/v1/llm, /api/v1/plan, /api/v1/data"

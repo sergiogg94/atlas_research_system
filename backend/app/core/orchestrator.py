@@ -1,13 +1,15 @@
 from typing import Optional, TypedDict
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.core.agents.data import build_data_graph
 from app.core.agents.planner import build_planner_graph
 from app.core.agents.research import build_research_graph
 from app.core.agents.synthesis import build_synthesis_graph
+from app.core.execution_repository import execution_repository
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger, trace_context
 from app.core.state_manager import state_manager
+from app.models.execution import ExecutionStatus
 from langgraph.graph import END, StateGraph
 
 
@@ -27,7 +29,8 @@ class OrchestratorState(TypedDict):
     checkpoint_idx: Optional[str]  # Redis checkpoint id
     consecutive_failures: int  # Degradation detection
     last_failure_agent: Optional[str]  # Last agent that failed
-    trace_id: str
+    trace_id: str  # Unique trace id for logging and tracing
+    execution_id: Optional[str]  # Database execution ID
 
 
 MAX_TOTAL_STEPS = 50
@@ -103,6 +106,50 @@ def with_checkpoint(node_func):
     return wrapped
 
 
+async def _record_execution_step(
+    state: OrchestratorState,
+    agent_name: str,
+    step_type: str,
+    input_summary: Optional[str] = None,
+    output_summary: Optional[str] = None,
+    status: str = "completed",
+    error: Optional[str] = None,
+    latency_ms: Optional[int] = None,
+):
+    """Persist a step record for the current execution when an execution_id exists."""
+    execution_id = state.get("execution_id")
+    if not execution_id:
+        return None
+
+    try:
+        execution_uuid = (
+            execution_id if isinstance(execution_id, UUID) else UUID(str(execution_id))
+        )
+    except ValueError:
+        logger.warning(
+            "Invalid execution_id received for step recording: %s", execution_id
+        )
+        return None
+
+    try:
+        return await execution_repository.add_step(
+            {
+                "execution_id": execution_uuid,
+                "trace_id": state.get("trace_id", ""),
+                "agent_name": agent_name,
+                "step_type": step_type,
+                "input_summary": input_summary,
+                "output_summary": output_summary,
+                "status": status,
+                "error": error,
+                "latency_ms": latency_ms,
+            }
+        )
+    except Exception as exc:
+        logger.warning("Failed to record execution step for %s: %s", agent_name, exc)
+        return None
+
+
 async def run_planner(state: OrchestratorState) -> OrchestratorState:
     """Invoke the Planner Agent to break down the task."""
     if state.get("error"):
@@ -110,17 +157,76 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
 
     with trace_context(state.get("trace_id", ""), "planner"):
         logger.info("Orchestrator: running planner agent")
-        graph = build_planner_graph()
-        result = await graph.ainvoke(
-            {
-                "task_description": state["task_description"],
-            }
+
+        execution = await execution_repository.create_execution(
+            trace_id=state.get("trace_id", ""),
+            task_description=state.get("task_description", ""),
+            objective=state.get("objective", ""),
+        )
+        execution_state = {
+            **state,
+            "execution_id": str(execution.id),
+        }
+
+        await _record_execution_step(
+            execution_state,
+            agent_name="planner",
+            step_type="planning",
+            input_summary=state.get("task_description"),
+            status="running",
         )
 
+        graph = build_planner_graph()
+        try:
+            result = await graph.ainvoke(
+                {
+                    "task_description": state["task_description"],
+                }
+            )
+        except Exception as exc:
+            await execution_repository.update_execution(
+                execution_id=execution.id,
+                status=ExecutionStatus.FAILED,
+                error=str(exc),
+            )
+            await _record_execution_step(
+                execution_state,
+                agent_name="planner",
+                step_type="planning",
+                input_summary=state.get("task_description"),
+                output_summary=str(exc),
+                status="failed",
+                error=str(exc),
+            )
+            return {**state, "error": f"Planner failed: {exc}"}
+
         if result.get("error"):
+            await execution_repository.update_execution(
+                execution_id=execution.id,
+                status=ExecutionStatus.FAILED,
+                error=str(result["error"]),
+            )
+            await _record_execution_step(
+                execution_state,
+                agent_name="planner",
+                step_type="planning",
+                input_summary=state.get("task_description"),
+                output_summary=str(result["error"]),
+                status="failed",
+                error=str(result["error"]),
+            )
             return {**state, "error": f"Planner failed: {result['error']}"}
 
         plan = result["plan"].model_dump()
+
+        await _record_execution_step(
+            execution_state,
+            agent_name="planner",
+            step_type="planning",
+            input_summary=state.get("task_description"),
+            output_summary=str(plan.get("objective", "")),
+            status="completed",
+        )
 
         state = await save_checkpoint(
             {
@@ -130,7 +236,14 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
                 "plan_steps": plan.get("steps", []),
                 "current_agent": "planner",
                 "total_steps": state.get("total_steps", 0) + 1,
+                "execution_id": str(execution.id),
             }
+        )
+
+        await execution_repository.update_execution(
+            execution_id=execution.id,
+            objective=plan.get("objective", ""),
+            total_steps=state.get("total_steps", 0),
         )
 
         return state
@@ -144,21 +257,86 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
 
     with trace_context(state.get("trace_id", ""), "research"):
         logger.info("Orchestrator: running research agent")
+
+        await _record_execution_step(
+            state,
+            agent_name="research",
+            step_type="research",
+            input_summary=str(state.get("plan_steps", [])),
+            status="running",
+        )
+
         graph = build_research_graph()
-        result = await graph.ainvoke(
-            {
-                "objective": state["objective"],
-                "steps": state["plan_steps"],
-                "current_step": 0,
-                "findings": [],
+        try:
+            result = await graph.ainvoke(
+                {
+                    "objective": state["objective"],
+                    "steps": state["plan_steps"],
+                    "current_step": 0,
+                    "findings": [],
+                }
+            )
+        except Exception as exc:
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=str(exc),
+            )
+            await _record_execution_step(
+                state,
+                agent_name="research",
+                step_type="research",
+                input_summary=str(state.get("plan_steps", [])),
+                output_summary=str(exc),
+                status="failed",
+                error=str(exc),
+            )
+            return {
+                **state,
+                "error": f"Research failed: {exc}",
+                "current_agent": "research",
             }
+
+        if result.get("error"):
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=str(result["error"]),
+            )
+            await _record_execution_step(
+                state,
+                agent_name="research",
+                step_type="research",
+                input_summary=str(state.get("plan_steps", [])),
+                output_summary=str(result["error"]),
+                status="failed",
+                error=str(result["error"]),
+            )
+            return {
+                **state,
+                "error": f"Research failed: {result['error']}",
+                "current_agent": "research",
+            }
+
+        await execution_repository.update_execution(
+            execution_id=UUID(state["execution_id"]),
+            total_steps=state.get("total_steps", 0) + len(state.get("plan_steps", [])),
+        )
+        await _record_execution_step(
+            state,
+            agent_name="research",
+            step_type="research",
+            input_summary=str(state.get("plan_steps", [])),
+            output_summary=str(result.get("findings", [])),
+            status="completed",
         )
 
         return {
             **state,
             "research_findings": result.get("findings", []),
             "current_agent": "research",
-            "total_steps": state.get("total_steps", 0) + len(state.get("plan_steps", [])),
+            "total_steps": state.get("total_steps", 0)
+            + len(state.get("plan_steps", [])),
         }
 
 
@@ -175,13 +353,77 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
             return state
 
         logger.info("Orchestrator: running data agent")
+
+        await _record_execution_step(
+            state,
+            agent_name="data",
+            step_type="data_analysis",
+            input_summary=state.get("objective"),
+            status="running",
+        )
+
         graph = build_data_graph()
-        result = await graph.ainvoke(
-            {
-                "task": state["objective"],
-                "context": _build_data_context(state),
-                "iteration": 0,
+        try:
+            result = await graph.ainvoke(
+                {
+                    "task": state["objective"],
+                    "context": _build_data_context(state),
+                    "iteration": 0,
+                }
+            )
+        except Exception as exc:
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=str(exc),
+            )
+            await _record_execution_step(
+                state,
+                agent_name="data",
+                step_type="data_analysis",
+                input_summary=state.get("objective"),
+                output_summary=str(exc),
+                status="failed",
+                error=str(exc),
+            )
+            return {
+                **state,
+                "error": f"Data agent failed: {exc}",
+                "current_agent": "data",
             }
+
+        if result.get("error"):
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=str(result["error"]),
+            )
+            await _record_execution_step(
+                state,
+                agent_name="data",
+                step_type="data_analysis",
+                input_summary=state.get("objective"),
+                output_summary=str(result["error"]),
+                status="failed",
+                error=str(result["error"]),
+            )
+            return {
+                **state,
+                "error": f"Data agent failed: {result['error']}",
+                "current_agent": "data",
+            }
+
+        await execution_repository.update_execution(
+            execution_id=UUID(state["execution_id"]),
+            total_steps=state.get("total_steps", 0) + 1,
+        )
+        await _record_execution_step(
+            state,
+            agent_name="data",
+            step_type="data_analysis",
+            input_summary=state.get("objective"),
+            output_summary=str(result.get("execution_result", "")),
+            status="completed",
         )
 
         return {
@@ -245,15 +487,81 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
     """Invoke Synthesis Agent with all results."""
     with trace_context(state.get("trace_id", ""), "synthesis"):
         logger.info("Orchestrator: running synthesis agent")
+
+        await _record_execution_step(
+            state,
+            agent_name="synthesis",
+            step_type="synthesis",
+            input_summary="Combining research and data findings",
+            status="running",
+        )
+
         graph = build_synthesis_graph()
-        result = await graph.ainvoke(
-            {
-                "objective": state["objective"],
-                "task_description": state["task_description"],
-                "plan": state.get("plan"),
-                "research_findings": state.get("research_findings"),
-                "data_results": state.get("data_results"),
+        try:
+            result = await graph.ainvoke(
+                {
+                    "objective": state["objective"],
+                    "task_description": state["task_description"],
+                    "plan": state.get("plan"),
+                    "research_findings": state.get("research_findings"),
+                    "data_results": state.get("data_results"),
+                }
+            )
+        except Exception as exc:
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=str(exc),
+            )
+            await _record_execution_step(
+                state,
+                agent_name="synthesis",
+                step_type="synthesis",
+                input_summary="Combining research and data findings",
+                output_summary=str(exc),
+                status="failed",
+                error=str(exc),
+            )
+            return {
+                **state,
+                "error": f"Synthesis failed: {exc}",
+                "current_agent": "synthesis",
             }
+
+        if result.get("error"):
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=str(result["error"]),
+            )
+            await _record_execution_step(
+                state,
+                agent_name="synthesis",
+                step_type="synthesis",
+                input_summary="Combining research and data findings",
+                output_summary=str(result["error"]),
+                status="failed",
+                error=str(result["error"]),
+            )
+            return {
+                **state,
+                "error": f"Synthesis failed: {result['error']}",
+                "current_agent": "synthesis",
+            }
+
+        await execution_repository.update_execution(
+            execution_id=UUID(state["execution_id"]),
+            status=ExecutionStatus.COMPLETED,
+            total_steps=state.get("total_steps", 0) + 1,
+            report=result.get("report"),
+        )
+        await _record_execution_step(
+            state,
+            agent_name="synthesis",
+            step_type="synthesis",
+            input_summary="Combining research and data findings",
+            output_summary=str(result.get("report", "")),
+            status="completed",
         )
 
         return {
@@ -299,6 +607,15 @@ async def re_plan(state: OrchestratorState) -> OrchestratorState:
             state.get("error"),
         )
 
+        await _record_execution_step(
+            state,
+            agent_name="orchestrator",
+            step_type="re_plan",
+            input_summary=f"Agent '{state.get('current_agent')}' failed",
+            output_summary=state.get("error"),
+            status="running",
+        )
+
         try:
             provider = get_llm_provider()
             prompt = (
@@ -326,6 +643,14 @@ async def re_plan(state: OrchestratorState) -> OrchestratorState:
 
         if decision == "skip":
             next_agent = _next_agent(state.get("current_agent", ""), state)
+            await _record_execution_step(
+                state,
+                agent_name="orchestrator",
+                step_type="re_plan",
+                input_summary=f"Skipping failed agent '{state.get('current_agent')}'",
+                output_summary=f"Moving to {next_agent}",
+                status="completed",
+            )
             return {
                 **state,
                 "error": None,
@@ -335,6 +660,14 @@ async def re_plan(state: OrchestratorState) -> OrchestratorState:
             }
         elif decision == "retry":
             same_agent = state.get("last_failure_agent") == state.get("current_agent")
+            await _record_execution_step(
+                state,
+                agent_name="orchestrator",
+                step_type="re_plan",
+                input_summary=f"Retrying agent '{state.get('current_agent')}'",
+                output_summary=f"Attempt {state.get('consecutive_failures', 0) + 1}",
+                status="completed",
+            )
             return {
                 **state,
                 "error": None,
@@ -343,7 +676,16 @@ async def re_plan(state: OrchestratorState) -> OrchestratorState:
                 ),
                 "last_failure_agent": state.get("current_agent"),
             }
-        return state  # abort — keep error
+        # abort — keep error
+        await _record_execution_step(
+            state,
+            agent_name="orchestrator",
+            step_type="re_plan",
+            input_summary=f"Aborting after failure in '{state.get('current_agent')}'",
+            output_summary=state.get("error"),
+            status="completed",
+        )
+        return state
 
 
 def _next_agent(current: str, state: OrchestratorState) -> str:
@@ -380,12 +722,26 @@ async def check_degradation(state: OrchestratorState) -> OrchestratorState:
                 state["consecutive_failures"],
                 state.get("current_agent", "?"),
             )
+            error_msg = (
+                f"Aborting after {state['consecutive_failures']} consecutive failures "
+                f"on agent '{state.get('current_agent', '?')}'"
+            )
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.FAILED,
+                error=error_msg,
+            )
+            await _record_execution_step(
+                state,
+                agent_name="orchestrator",
+                step_type="degradation_check",
+                input_summary=f"Consecutive failures: {state.get('consecutive_failures', 0)}",
+                output_summary=error_msg,
+                status="completed",
+            )
             return {
                 **state,
-                "error": (
-                    f"Aborting after {state['consecutive_failures']} consecutive failures "
-                    f"on agent '{state.get('current_agent', '?')}'"
-                ),
+                "error": error_msg,
             }
         return state
 
@@ -395,7 +751,24 @@ async def check_max_steps(state: OrchestratorState) -> OrchestratorState:
     with trace_context(state.get("trace_id", ""), "max_steps_check"):
         if state.get("total_steps", 0) >= MAX_TOTAL_STEPS:
             logger.warning("Max steps reached (%d)", MAX_TOTAL_STEPS)
-            return {**state, "error": f"Execution limit reached: {MAX_TOTAL_STEPS} steps"}
+            error_msg = f"Execution limit reached: {MAX_TOTAL_STEPS} steps"
+            await execution_repository.update_execution(
+                execution_id=UUID(state["execution_id"]),
+                status=ExecutionStatus.TIMEOUT,
+                error=error_msg,
+            )
+            await _record_execution_step(
+                state,
+                agent_name="orchestrator",
+                step_type="max_steps_check",
+                input_summary=f"Total steps: {state.get('total_steps', 0)}",
+                output_summary=error_msg,
+                status="completed",
+            )
+            return {
+                **state,
+                "error": error_msg,
+            }
         return state
 
 

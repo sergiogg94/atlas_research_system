@@ -54,7 +54,7 @@ async def list_executions(
 
 
 @router.get(
-    "/task/{trce_id}",
+    "/tasks/{trace_id}",
     response_model=ExecutionDetailResponse,
     summary="Get execution detail by trace_id",
 )
@@ -81,10 +81,11 @@ async def get_execution(trace_id: str):
             completed_at=execution.completed_at,
             created_at=execution.created_at,
             updated_at=execution.updated_at,
+            report=execution.report,
             steps=[
                 StepDetail(
                     id=str(s.id),
-                    execution_id=s.execution_id,
+                    execution_id=str(s.execution_id),
                     trace_id=s.trace_id,
                     agent_name=s.agent_name,
                     step_type=s.step_type,
@@ -100,8 +101,8 @@ async def get_execution(trace_id: str):
             llm_calls=[
                 LLMCallDetail(
                     id=str(c.id),
-                    execution_id=c.execution_id,
-                    step_id=c.step_id,
+                    execution_id=str(c.execution_id),
+                    step_id=str(c.step_id) if c.step_id else None,
                     trace_id=c.trace_id,
                     agent_name=c.agent_name,
                     prompt_preview=c.prompt_preview,
@@ -118,13 +119,13 @@ async def get_execution(trace_id: str):
             ],
             tool_calls=[
                 ToolCallDetail(
-                    id=t.id,
-                    execution_id=t.execution_id,
-                    step_id=t.step_id,
+                    id=str(t.id),
+                    execution_id=str(t.execution_id),
+                    step_id=str(t.step_id) if t.step_id else None,
                     trace_id=t.trace_id,
                     tool_name=t.tool_name,
                     status=t.status,
-                    input=t.input,
+                    input=str(t.input) if t.input else None,
                     output_preview=t.output_preview,
                     error=t.error,
                     latency_ms=t.latency_ms,

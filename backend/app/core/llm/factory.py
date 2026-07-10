@@ -2,6 +2,7 @@ from app.config import get_settings
 from app.core.llm.base import LLMProvider
 from app.core.llm.echo import EchoProvider
 from app.core.llm.ollama import OllamaProvider
+from app.core.tracing import wrap_llm_provider
 
 _providers: dict[str, type[LLMProvider]] = {
     "echo": EchoProvider,
@@ -19,8 +20,10 @@ def get_llm_provider() -> LLMProvider:
     settings = get_settings()
     cls = _providers.get(settings.llm_provider)
     if cls is None:
-        return EchoProvider()
-    return cls()
+        provider = EchoProvider()
+    else:
+        provider = cls()
+    return wrap_llm_provider(provider)
 
 
 # Para mantener un singleton por provider (opcional pero recomendado)

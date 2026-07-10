@@ -7,7 +7,13 @@ from app.core.agents.research import build_research_graph
 from app.core.agents.synthesis import build_synthesis_graph
 from app.core.execution_repository import execution_repository
 from app.core.llm.factory import get_llm_provider
-from app.core.logging import logger, trace_context, trace_step
+from app.core.logging import (
+    execution_id_var,
+    logger,
+    step_id_var,
+    trace_context,
+    trace_step,
+)
 from app.core.state_manager import state_manager
 from app.models.execution import ExecutionStatus
 from langgraph.graph import END, StateGraph
@@ -170,13 +176,17 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
             "execution_id": str(execution.id),
         }
 
-        await _record_execution_step(
+        execution_id_var.set(str(execution.id))
+
+        step = await _record_execution_step(
             execution_state,
             agent_name="planner",
             step_type="planning",
             input_summary=state.get("task_description"),
             status="running",
         )
+        if step:
+            step_id_var.set(str(step.id))
 
         graph = build_planner_graph()
         try:
@@ -262,13 +272,17 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
     with trace_context(state.get("trace_id", ""), "research"):
         logger.info("Orchestrator: running research agent")
 
-        await _record_execution_step(
+        execution_id_var.set(state.get("execution_id", ""))
+
+        step = await _record_execution_step(
             state,
             agent_name="research",
             step_type="research",
             input_summary=str(state.get("plan_steps", [])),
             status="running",
         )
+        if step:
+            step_id_var.set(str(step.id))
 
         graph = build_research_graph()
         try:
@@ -360,13 +374,17 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
 
         logger.info("Orchestrator: running data agent")
 
-        await _record_execution_step(
+        execution_id_var.set(state.get("execution_id", ""))
+
+        step = await _record_execution_step(
             state,
             agent_name="data",
             step_type="data_analysis",
             input_summary=state.get("objective"),
             status="running",
         )
+        if step:
+            step_id_var.set(str(step.id))
 
         graph = build_data_graph()
         try:
@@ -496,13 +514,17 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
     with trace_context(state.get("trace_id", ""), "synthesis"):
         logger.info("Orchestrator: running synthesis agent")
 
-        await _record_execution_step(
+        execution_id_var.set(state.get("execution_id", ""))
+
+        step = await _record_execution_step(
             state,
             agent_name="synthesis",
             step_type="synthesis",
             input_summary="Combining research and data findings",
             status="running",
         )
+        if step:
+            step_id_var.set(str(step.id))
 
         graph = build_synthesis_graph()
         try:

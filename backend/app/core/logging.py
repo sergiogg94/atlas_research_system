@@ -2,12 +2,15 @@ import logging
 import logging.config
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Optional
 
 import colorlog
 from app.config import get_settings
 
 trace_id_var: ContextVar[str] = ContextVar("trace_id", default="")
 agent_name_var: ContextVar[str] = ContextVar("agent_name", default="")
+execution_id_var: ContextVar[str] = ContextVar("execution_id", default="")
+step_id_var: ContextVar[Optional[str]] = ContextVar("step_id", default=None)
 
 
 @contextmanager

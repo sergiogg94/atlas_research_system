@@ -3,6 +3,7 @@ from app.core.tools.python_executor import PythonExecutorTool
 from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
 from app.core.tools.sql_query import SQLQueryTool
+from app.core.tracing import wrap_tool
 
 _tools: dict[str, BaseTool] = {}
 
@@ -15,7 +16,7 @@ def get_tool(name: str) -> BaseTool:
     tool = _tools.get(name)
     if tool is None:
         raise KeyError(f"Tool '{name}' not found. Available: {list(_tools.keys())}")
-    return tool
+    return wrap_tool(tool)
 
 
 def list_tools() -> dict[str, str]:

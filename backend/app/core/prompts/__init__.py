@@ -1,6 +1,8 @@
 from app.core.prompts.data import (
     AnalysisSystemPrompt,
     AnalysisUserPrompt,
+    ClassifyOutputSystemPrompt,
+    ClassifyOutputUserPrompt,
     CodeGenSystemPrompt,
     CodeGenUserPrompt,
 )
@@ -17,6 +19,8 @@ _PROMPTS: dict[str, type] = {
     "data_analysis_user": AnalysisUserPrompt,
     "data_code_gen_system": CodeGenSystemPrompt,
     "data_code_gen_user": CodeGenUserPrompt,
+    "data_classify_output_system": ClassifyOutputSystemPrompt,
+    "data_classify_output_user": ClassifyOutputUserPrompt,
     "synthesis_system": SynthesisSystemPrompt,
     "synthesis_user": SynthesisUserPrompt,
 }

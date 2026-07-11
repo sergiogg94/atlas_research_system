@@ -69,3 +69,23 @@ Return only the code in a markdown block with the language tag."""
     description = (
         "User prompt for python and SQL code generation for data analysis agent"
     )
+
+
+class ClassifyOutputSystemPrompt(PromptTemplate):
+    template = """You are a code classifier. Given a block of generated code, determine whether it contains Python code, SQL query, or both.
+
+If both, extract the Python part and the SQL part separately.
+Return ONLY valid JSON with this structure:
+{"type": "python", "python_code": "<full code>"}
+{"type": "sql", "sql_query": "<full query>"}
+{"type": "both", "python_code": "<python part>", "sql_query": "<sql part>"}"""
+    version = "1.0.0"
+    description = "System prompt for classifying generated code as Python, SQL, or both"
+
+
+class ClassifyOutputUserPrompt(PromptTemplate):
+    template = """Classify this generated code and extract the parts:
+
+{code}"""
+    version = "1.0.0"
+    description = "User prompt for classifying generated code"

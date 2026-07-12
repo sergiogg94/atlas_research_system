@@ -176,3 +176,39 @@ Implemented the final piece of agent orchestration: the Synthesis Agent that con
 3. **LLM-based re-planning is powerful but fragile** — The LLM correctly decides retry/skip/abort in most cases, but malformed JSON responses require a try/except fallback. Adding few-shot examples to the prompt would improve reliability.
 4. **Safety layers must be tested explicitly** — `test_max_steps_limit` and `test_replan_on_error` catch edge cases that would otherwise cause infinite loops or silent failures in production. These tests are cheap to write and invaluable for confidence.
 5. **Graph compilation errors surface structural issues** — The orchestrator graph compilation (7 nodes, 9+ edges) revealed mismatches between routing function return values and edge destination names. Compilation-time validation in LangGraph catches these before runtime.
+
+---
+
+## Week 6: Observability, Execution Persistence & Data Agent Refinements
+
+### Summary
+Implemented a complete observability layer with end-to-end trace_id propagation, structured logging with context, and full execution history persistence in PostgreSQL (4 new tables). Added history query endpoints (list, detail, metrics), automatic LLM and tool call recording via transparent wrappers, and a `trace_step` decorator for latency tracking. Refined the Data Agent with a new `classify_output` node that splits generated code into Python/SQL/both using dedicated prompts. Documented the execution database schema with a Mermaid ER diagram.
+
+### Key Deliverables
+- **Trace ID infrastructure** — `TraceIDMiddleware` assigns/generates trace_id per request; `ContextVar`-based propagation (`trace_id_var`, `agent_name_var`, `execution_id_var`, `step_id_var`) across all agents and the orchestrator; `trace_context` contextmanager for node-level scoping
+- **Structured logging with context** — `ContextFormatter` (extending `colorlog.ColoredFormatter`) injects `trace_id` and `agent_name` into every log record; log format updated to `[trace_id] [agent_name] (timestamp) (module func): message`
+- **`trace_step` decorator** — Wraps agent nodes with automatic latency measurement and logging; attaches `last_step_latency_ms` to state
+- **PostgreSQL execution schema** — 5 models: `Execution` (with `ExecutionStatus` enum: pending/running/completed/failed/timeout), `ExecutionStep`, `LLMCall`, `ToolCallRecord`, and `ExecutionMetricsCache` — all with proper FKs, indexes, and cascade rules
+- **ExecutionRepository** — Full CRUD + query methods (`create_execution`, `update_execution`, `add_step`, `add_llm_call`, `add_tool_call`, `list_executions` with pagination, `get_steps`, `get_llm_calls`, `get_tool_calls`)
+- **Orchestrator integration** — `run_planner` creates an `Execution` record on start; every agent node records an `ExecutionStep`; `run_synthesis` marks `COMPLETED`; checkpoints and re_plan/degradation nodes update status to `FAILED`/`TIMEOUT`
+- **LLM call tracing** — `_TracedLLMProvider` transparent wrapper intercepts `generate()` calls, records prompt preview, response, latency, and estimated tokens via `asyncio.ensure_future`; wired in `get_llm_provider()`
+- **Tool call tracing** — `_TracedTool` transparent wrapper intercepts `execute()` calls, records tool input, output preview, status, and latency; wired in `get_tool()`
+- **History endpoints** — `GET /api/v1/tasks` (paginated list with optional status filter), `GET /api/v1/tasks/{trace_id}` (full detail with steps, LLM calls, tool calls, report), `GET /api/v1/tasks/{trace_id}/metrics` (consolidated metrics: duration, token counts, cost estimation, avg latencies)
+- **Data Agent classifier** — New `classify_output` LangGraph node that uses LLM to split generated code into Python, SQL, or both with dedicated prompts (`data_classify_output_system`/`data_classify_output_user` v1.0.0); updated routing: `generate_code -> classify_output -> execute_python/execute_sql`
+- **Documentation** — `docs/execution_db.md` with Mermaid ER diagram, table definitions, indexes, and relationship matrix; updated `docs/data_graph.md` with new `classify_output` node and edges
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| ContextVar over thread-local for trace_id | Async-native: ContextVar propagates automatically across `await` boundaries without manual threading. Each concurrent request gets its own isolated context. |
+| Transparent wrapper pattern for LLM/tools | `_TracedLLMProvider` and `_TracedTool` wrap the real implementations without modifying their code. Observability is a cross-cutting concern, not business logic. |
+| `asyncio.ensure_future` for DB writes in tracing | Fire-and-forget: recording LLM/tool calls to PostgreSQL does not block the agent node. If the DB write fails, only a warning is logged — the execution continues. |
+| ExecutionMetricsCache as separate table | Pre-cached aggregated metrics avoid expensive COUNT/SUM queries on every metrics endpoint call. Updated on execution completion. |
+| classify_output as a dedicated graph node | Isolates code classification from code generation, enabling independent iteration on the classification prompt without touching generation logic. |
+
+### Key Learnings
+1. **ContextVar discipline** — ContextVar requires explicit `token` management: every `set()` returns a token for `reset()`. The `trace_context` contextmanager pattern prevents context leaks between concurrent requests.
+2. **Transparent wrappers over monkey-patching** — Wrapping the provider/tool instances at creation time (in `get_llm_provider()` and `get_tool()`) is cleaner than monkey-patching methods. The wrapper delegates all calls and adds observability transparently.
+3. **Fire-and-forget DB writes are risky but practical** — `asyncio.ensure_future` for LLM call recording means DB failures are silently swallowed. In production, a background queue (Redis/Celery) would be better, but for a prototype this avoids adding latency to LLM calls.
+4. **UUID handling across layers** — TypedDict state stores execution_id as `Optional[str]`, but the repository expects `UUID`. Consistent conversion at the boundary (with try/except fallback) prevents serialization errors.
+5. **Code classification is surprisingly effective** — The LLM reliably splits Python+SQL outputs when prompted with JSON schema instructions. The `classify_output` node eliminated the previous ambiguity where the Data Agent would try to execute a mixed output as pure Python and fail.

@@ -11,3 +11,9 @@ wheels/
 
 # Environment variables
 .env
+
+# Cobertura
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

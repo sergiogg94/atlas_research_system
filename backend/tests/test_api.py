@@ -1,5 +1,7 @@
 import asyncio
 import json
+from datetime import datetime
+from uuid import uuid4
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -397,3 +399,137 @@ class TestResearch:
         assert response.status_code == 200
         data = response.json()
         assert len(data["findings"]) >= 1
+
+
+class TestHistory:
+    @pytest.mark.asyncio
+    async def test_list_tasks_empty(self, client):
+        mock_repo = AsyncMock()
+        mock_repo.list_executions.return_value = ([], 0)
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get("/api/v1/tasks")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["executions"] == []
+        assert data["total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_pagination(self, client):
+        now = datetime.now()
+        mock_exec = MagicMock()
+        mock_exec.id = uuid4()
+        mock_exec.trace_id = "trace-1"
+        mock_exec.task_description = "Test task"
+        mock_exec.objective = "obj"
+        mock_exec.status = "completed"
+        mock_exec.total_steps = 3
+        mock_exec.error = None
+        mock_exec.started_at = None
+        mock_exec.completed_at = None
+        mock_exec.created_at = now
+        mock_exec.updated_at = now
+
+        mock_repo = AsyncMock()
+        mock_repo.list_executions.return_value = ([mock_exec], 1)
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get(
+                "/api/v1/tasks?page=1&page_size=10&status=completed"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["executions"]) == 1
+        assert data["total"] == 1
+        assert data["page"] == 1
+        assert data["page_size"] == 10
+        assert data["executions"][0]["trace_id"] == "trace-1"
+
+    @pytest.mark.asyncio
+    async def test_get_task_by_trace_id_200(self, client):
+        now = datetime.now()
+        exec_id = uuid4()
+        mock_exec = MagicMock()
+        mock_exec.id = exec_id
+        mock_exec.trace_id = "trace-1"
+        mock_exec.task_description = "Test task"
+        mock_exec.objective = "obj"
+        mock_exec.status = "completed"
+        mock_exec.total_steps = 3
+        mock_exec.error = None
+        mock_exec.report = "Final report"
+        mock_exec.started_at = None
+        mock_exec.completed_at = None
+        mock_exec.created_at = now
+        mock_exec.updated_at = now
+
+        mock_repo = AsyncMock()
+        mock_repo.get_execution_by_trace_id.return_value = mock_exec
+        mock_repo.get_steps.return_value = []
+        mock_repo.get_llm_calls.return_value = []
+        mock_repo.get_tool_calls.return_value = []
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get("/api/v1/tasks/trace-1")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["execution"]["trace_id"] == "trace-1"
+        assert data["execution"]["status"] == "completed"
+        assert data["execution"]["steps"] == []
+        assert data["execution"]["llm_calls"] == []
+        assert data["execution"]["tool_calls"] == []
+
+    @pytest.mark.asyncio
+    async def test_get_task_by_trace_id_404(self, client):
+        mock_repo = AsyncMock()
+        mock_repo.get_execution_by_trace_id.return_value = None
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get("/api/v1/tasks/nonexistent")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_get_task_metrics_200(self, client):
+        exec_id = uuid4()
+        mock_metrics = MagicMock()
+        mock_metrics.execution_id = exec_id
+        mock_metrics.trace_id = "trace-1"
+        mock_metrics.total_duration_ms = 1500
+        mock_metrics.total_llm_calls = 10
+        mock_metrics.total_tool_calls = 5
+        mock_metrics.total_steps = 3
+        mock_metrics.total_tokens_input = 5000
+        mock_metrics.total_tokens_output = 2000
+        mock_metrics.estimated_cost_usd = 0.05
+        mock_metrics.avg_step_latency_ms = 500.0
+        mock_metrics.avg_llm_latency_ms = 150.0
+        mock_metrics.error_count = 0
+
+        mock_repo = AsyncMock()
+        mock_repo.get_metrics.return_value = mock_metrics
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get("/api/v1/tasks/trace-1/metrics")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metrics"]["trace_id"] == "trace-1"
+        assert data["metrics"]["total_llm_calls"] == 10
+        assert data["metrics"]["total_tool_calls"] == 5
+        assert data["metrics"]["estimated_cost_usd"] == 0.05
+
+    @pytest.mark.asyncio
+    async def test_get_task_metrics_404(self, client):
+        mock_repo = AsyncMock()
+        mock_repo.get_metrics.return_value = None
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get("/api/v1/tasks/nonexistent/metrics")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()

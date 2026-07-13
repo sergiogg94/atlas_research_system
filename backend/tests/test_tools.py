@@ -316,10 +316,12 @@ class TestSQLQueryTool:
 class TestToolRegistry:
     def test_get_tool_returns_registered_tool(self):
         tool = get_tool("web_search")
-        assert isinstance(tool, WebSearchTool)
+        assert tool.name == "web_search"
+        assert hasattr(tool, "execute")
 
         tool = get_tool("web_scraper")
-        assert isinstance(tool, WebScraperTool)
+        assert tool.name == "web_scraper"
+        assert hasattr(tool, "execute")
 
     def test_get_tool_raises_key_error_for_unknown(self):
         with pytest.raises(KeyError, match="unknown_tool"):

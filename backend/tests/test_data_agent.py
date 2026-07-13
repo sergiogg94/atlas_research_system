@@ -1,7 +1,15 @@
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.core.agents.data import build_data_graph, needs_sql, has_error, analyze_task, generate_code
+import pytest
+from app.core.agents.data import (
+    analyze_task,
+    build_data_graph,
+    classify_output,
+    generate_code,
+    has_python_error,
+    has_sql_error,
+    route_execution,
+)
 from app.core.llm.base import LLMProvider
 from app.core.tools.base import ToolResult
 
@@ -71,10 +79,13 @@ def build_initial_state(**overrides):
 class TestDataAgent:
     @pytest.mark.asyncio
     async def test_python_only_executes_python(self):
-        llm = FakeLLMProvider(responses=[
-            "Use Python with pandas for descriptive statistics and visualization",
-            "import pandas as pd\nimport numpy as np\ndf = pd.DataFrame({'costs': [100, 200, 300]})\nprint(df.mean())",
-        ])
+        llm = FakeLLMProvider(
+            responses=[
+                "Use Python with pandas for descriptive statistics and visualization",
+                "import pandas as pd\nimport numpy as np\ndf = pd.DataFrame({'costs': [100, 200, 300]})\nprint(df.mean())",
+                '{"type": "python", "python_code": "import pandas as pd\\nimport numpy as np\\ndf = pd.DataFrame({\'costs\': [100, 200, 300]})\\nprint(df.mean())"}',
+            ]
+        )
         _, _, get_tool_side_effect = build_mock_tools()
 
         with (
@@ -93,10 +104,13 @@ class TestDataAgent:
 
     @pytest.mark.asyncio
     async def test_sql_path(self):
-        llm = FakeLLMProvider(responses=[
-            "Use SQL to query the database to find average costs by region",
-            "SELECT region, AVG(cost) FROM healthcare_data GROUP BY region",
-        ])
+        llm = FakeLLMProvider(
+            responses=[
+                "Use SQL to query the database to find average costs by region",
+                "SELECT region, AVG(cost) FROM healthcare_data GROUP BY region",
+                '{"type": "sql", "sql_query": "SELECT region, AVG(cost) FROM healthcare_data GROUP BY region"}',
+            ]
+        )
         _, _, get_tool_side_effect = build_mock_tools()
 
         with (
@@ -113,10 +127,13 @@ class TestDataAgent:
 
     @pytest.mark.asyncio
     async def test_retry_on_error(self):
-        llm = FakeLLMProvider(responses=[
-            "Use Python to analyze",
-            "print('hello')",
-        ])
+        llm = FakeLLMProvider(
+            responses=[
+                "Use Python to analyze",
+                "print('hello')",
+                '{"type": "python"}',
+            ]
+        )
         python_tool, _, get_tool_side_effect = build_mock_tools()
         python_tool.execute.side_effect = [
             ToolResult(success=False, error="Division by zero"),
@@ -135,10 +152,13 @@ class TestDataAgent:
 
     @pytest.mark.asyncio
     async def test_max_retries_exceeded(self):
-        llm = FakeLLMProvider(responses=[
-            "Use Python to analyze",
-            "print('hello')",
-        ])
+        llm = FakeLLMProvider(
+            responses=[
+                "Use Python to analyze",
+                "print('hello')",
+                '{"type": "python"}',
+            ]
+        )
         python_tool, _, get_tool_side_effect = build_mock_tools()
         python_tool.execute.return_value = ToolResult(
             success=False, error="Persistent error"
@@ -156,10 +176,13 @@ class TestDataAgent:
 
     @pytest.mark.asyncio
     async def test_empty_analysis_response(self):
-        llm = FakeLLMProvider(responses=[
-            "",
-            "print('hello')",
-        ])
+        llm = FakeLLMProvider(
+            responses=[
+                "",
+                "print('hello')",
+                '{"type": "python"}',
+            ]
+        )
         _, _, get_tool_side_effect = build_mock_tools()
 
         with (
@@ -176,10 +199,12 @@ class TestDataAgent:
 
     @pytest.mark.asyncio
     async def test_empty_code_generation(self):
-        llm = FakeLLMProvider(responses=[
-            "Use Python to analyze",
-            "",
-        ])
+        llm = FakeLLMProvider(
+            responses=[
+                "Use Python to analyze",
+                "",
+            ]
+        )
         _, _, get_tool_side_effect = build_mock_tools()
 
         with (
@@ -218,27 +243,97 @@ class TestDataAgent:
         assert llm.call_count == 1
 
 
-class TestDataConditionalEdges:
-    def test_needs_sql_returns_sql(self):
-        assert needs_sql({"analysis": "Use SQL to query"}) == "sql"
-        assert needs_sql({"analysis": "Query the database"}) == "sql"
-        assert needs_sql({"analysis": "Access the database"}) == "sql"
+class TestDataRouting:
+    def test_route_execution_returns_sql(self):
+        assert route_execution({"code": None, "query": "SELECT ..."}) == "sql"
 
-    def test_needs_sql_returns_python_only(self):
-        assert needs_sql({"analysis": "Use pandas to analyze"}) == "python_only"
-        assert needs_sql({"analysis": "Create a visualization"}) == "python_only"
-        assert needs_sql({"analysis": ""}) == "python_only"
-        assert needs_sql({}) == "python_only"
+    def test_route_execution_returns_python_only(self):
+        assert route_execution({"code": "print(1)", "query": None}) == "python_only"
 
-    def test_has_error_returns_success(self):
-        assert has_error({"iteration": 0}) == "success"
-        assert has_error({"error": None, "iteration": 5}) == "success"
-        assert has_error({}) == "success"
+    def test_route_execution_returns_both(self):
+        assert route_execution({"code": "print(1)", "query": "SELECT ..."}) == "both"
 
-    def test_has_error_returns_retry(self):
-        assert has_error({"error": "Something wrong", "iteration": 0}) == "retry"
-        assert has_error({"error": "Failure", "iteration": 2}) == "retry"
+    def test_route_execution_returns_failed(self):
+        assert route_execution({"code": None, "query": None}) == "failed"
 
-    def test_has_error_returns_failed(self):
-        assert has_error({"error": "Persistent", "iteration": 3}) == "failed"
-        assert has_error({"error": "Persistent", "iteration": 5}) == "failed"
+    def test_has_python_error_returns_success(self):
+        assert (
+            has_python_error({"error": None, "iteration": 0, "query": None})
+            == "success"
+        )
+
+    def test_has_python_error_returns_retry(self):
+        assert has_python_error({"error": "err", "iteration": 0}) == "retry"
+        assert has_python_error({"error": "err", "iteration": 2}) == "retry"
+
+    def test_has_python_error_returns_failed(self):
+        assert has_python_error({"error": "err", "iteration": 3}) == "failed"
+        assert has_python_error({"error": "err", "iteration": 5}) == "failed"
+
+    def test_has_python_error_returns_sql_pending(self):
+        assert has_python_error({"error": None, "query": "SELECT ..."}) == "sql_pending"
+
+    def test_has_sql_error_returns_success(self):
+        assert has_sql_error({"error": None, "iteration": 0}) == "success"
+
+    def test_has_sql_error_returns_retry(self):
+        assert has_sql_error({"error": "err", "iteration": 0}) == "retry"
+        assert has_sql_error({"error": "err", "iteration": 2}) == "retry"
+
+    def test_has_sql_error_returns_failed(self):
+        assert has_sql_error({"error": "err", "iteration": 3}) == "failed"
+        assert has_sql_error({"error": "err", "iteration": 5}) == "failed"
+
+
+class TestClassifyOutput:
+    @pytest.mark.asyncio
+    async def test_classify_output_sql(self):
+        llm = FakeLLMProvider(responses=['{"type": "sql", "sql_query": "SELECT 1"}'])
+        with patch("app.core.agents.data.get_llm_provider", return_value=llm):
+            result = await classify_output(
+                {"task": "test", "code": "SELECT 1", "trace_id": "t1"}
+            )
+            assert result["code"] is None
+            assert result["query"] == "SELECT 1"
+
+    @pytest.mark.asyncio
+    async def test_classify_output_python(self):
+        llm = FakeLLMProvider(
+            responses=['{"type": "python", "python_code": "print(1)"}']
+        )
+        with patch("app.core.agents.data.get_llm_provider", return_value=llm):
+            result = await classify_output(
+                {"task": "test", "code": "print(1)", "trace_id": "t1"}
+            )
+            assert result["code"] == "print(1)"
+            assert result["query"] is None
+
+    @pytest.mark.asyncio
+    async def test_classify_output_both(self):
+        llm = FakeLLMProvider(
+            responses=[
+                '{"type": "both", "python_code": "print(1)", "sql_query": "SELECT 1"}'
+            ]
+        )
+        with patch("app.core.agents.data.get_llm_provider", return_value=llm):
+            result = await classify_output(
+                {"task": "test", "code": "mixed", "trace_id": "t1"}
+            )
+            assert result["code"] == "print(1)"
+            assert result["query"] == "SELECT 1"
+
+    @pytest.mark.asyncio
+    async def test_classify_output_no_code(self):
+        result = await classify_output({"task": "test", "code": None, "trace_id": "t1"})
+        assert result["code"] is None
+        assert result.get("query") is None
+
+    @pytest.mark.asyncio
+    async def test_classify_output_invalid_json(self):
+        llm = FakeLLMProvider(responses=["not valid json"])
+        with patch("app.core.agents.data.get_llm_provider", return_value=llm):
+            result = await classify_output(
+                {"task": "test", "code": "print(1)", "trace_id": "t1"}
+            )
+            assert result["code"] == "print(1)"
+            assert result["query"] is None

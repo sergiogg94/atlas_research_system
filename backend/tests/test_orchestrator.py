@@ -1,4 +1,5 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -53,6 +54,7 @@ INITIAL_STATE = {
     "checkpoint_idx": None,
     "consecutive_failures": 0,
     "last_failure_agent": None,
+    "trace_id": "test-trace",
 }
 
 
@@ -60,6 +62,17 @@ INITIAL_STATE = {
 def mock_redis():
     with patch.object(state_manager, "save_orchestrator_state", AsyncMock()) as m:
         yield m
+
+
+@pytest.fixture(autouse=True)
+def mock_execution_repo():
+    mock_exec = MagicMock()
+    mock_exec.id = uuid4()
+    with patch("app.core.orchestrator.execution_repository") as mock_repo:
+        mock_repo.create_execution = AsyncMock(return_value=mock_exec)
+        mock_repo.add_step = AsyncMock(return_value=MagicMock(id=uuid4()))
+        mock_repo.update_execution = AsyncMock()
+        yield mock_repo
 
 
 @pytest.mark.asyncio

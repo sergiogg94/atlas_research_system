@@ -135,3 +135,32 @@ async def get_execution(trace_id: str):
             ],
         )
     )
+
+
+@router.get(
+    "/tasks/{trace_id}/metrics",
+    response_model=ExecutionMetricsResponse,
+    summary="Get execution metrics by trace_id",
+)
+async def get_execution_metrics(trace_id: str):
+    metrics = await execution_repository.get_metrics(trace_id)
+
+    if not metrics:
+        raise HTTPException(status_code=404, detail="Metrics not found")
+
+    return ExecutionMetricsResponse(
+        metrics=ExecutionMetrics(
+            execution_id=str(metrics.execution_id),
+            trace_id=metrics.trace_id,
+            total_duration_ms=metrics.total_duration_ms,
+            total_llm_calls=metrics.total_llm_calls,
+            total_tool_calls=metrics.total_tool_calls,
+            total_steps=metrics.total_steps,
+            total_tokens_input=metrics.total_tokens_input,
+            total_tokens_output=metrics.total_tokens_output,
+            estimated_cost_usd=metrics.estimated_cost_usd,
+            avg_step_latency_ms=metrics.avg_step_latency_ms,
+            avg_llm_latency_ms=metrics.avg_llm_latency_ms,
+            error_count=metrics.error_count,
+        )
+    )

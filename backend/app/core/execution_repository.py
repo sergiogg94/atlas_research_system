@@ -6,6 +6,7 @@ from app.core.datetime_utils import now
 from app.core.logging import logger
 from app.models.execution import (
     Execution,
+    ExecutionMetricsCache,
     ExecutionStatus,
     ExecutionStep,
     LLMCall,
@@ -159,6 +160,17 @@ class ExecutionRepository:
                 .order_by(ToolCallRecord.created_at)
             )
             return list(result.scalars().all())
+
+    async def get_metrics(
+        self, trace_id: str
+    ) -> Optional[ExecutionMetricsCache]:
+        async with SessionLocal() as session:
+            result = await session.execute(
+                select(ExecutionMetricsCache).where(
+                    ExecutionMetricsCache.trace_id == trace_id
+                )
+            )
+            return result.scalar_one_or_none()
 
 
 execution_repository = ExecutionRepository()

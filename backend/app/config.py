@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     debug: bool = True
     log_level: str = "DEBUG"
 
+    # Timezone
+    timezone: str = "America/Mexico_City"
+
     # LLM provider settings
     llm_provider: str = "echo"  # Default to "echo" for testing purposes
     ollama_base_url: Optional[str] = None

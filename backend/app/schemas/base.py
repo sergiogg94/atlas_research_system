@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Any
 from datetime import datetime
+from typing import Any, Optional
+
+from app.core.datetime_utils import now
+from pydantic import BaseModel, Field
 
 
 ## Response base models
@@ -8,9 +10,7 @@ class BaseResponse(BaseModel):
     """Base model response for all API endpoints."""
 
     status: str = Field("success", description="Status of the API response")
-    timestamp: datetime = Field(
-        default_factory=datetime.now, description="Response timestamp"
-    )
+    timestamp: datetime = Field(default_factory=now, description="Response timestamp")
 
 
 class BaseResponseWithMetadata(BaseResponse):
@@ -32,6 +32,4 @@ class ErrorResponse(BaseModel):
         ..., description="Error message", json_schema_extra={"example": "Invalid input"}
     )
     details: Optional[dict] = Field(None, description="Additional error details")
-    timestamp: datetime = Field(
-        default_factory=datetime.now, description="Response timestamp"
-    )
+    timestamp: datetime = Field(default_factory=now, description="Response timestamp")

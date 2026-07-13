@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
 from enum import Enum
 
 from app.core.database import Base
+from app.core.datetime_utils import now
 from sqlalchemy import JSON, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
@@ -30,10 +30,10 @@ class Execution(Base):
     total_steps = Column(Integer, default=0)
     error = Column(Text, nullable=True)
     report = Column(Text, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now)
+    updated_at = Column(DateTime(timezone=True), default=now, onupdate=now)
 
 
 class ExecutionStep(Base):
@@ -54,7 +54,7 @@ class ExecutionStep(Base):
     status = Column(String(20), default="completed")
     error = Column(Text, nullable=True)
     latency_ms = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime(timezone=True), default=now)
 
 
 class ExecutionMetricsCache(Base):
@@ -76,7 +76,7 @@ class ExecutionMetricsCache(Base):
     avg_step_latency_ms = Column(Float, nullable=True)
     avg_llm_latency_ms = Column(Float, nullable=True)
     error_count = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    updated_at = Column(DateTime(timezone=True), default=now, onupdate=now)
 
 
 class LLMCall(Base):
@@ -104,7 +104,7 @@ class LLMCall(Base):
     latency_ms = Column(Integer, nullable=True)
     estimated_tokens_input = Column(Integer, nullable=True)
     estimated_tokens_output = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime(timezone=True), default=now)
 
 
 class ToolCallRecord(Base):
@@ -129,4 +129,4 @@ class ToolCallRecord(Base):
     status = Column(String(20), default="success")
     error = Column(Text, nullable=True)
     latency_ms = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime(timezone=True), default=now)

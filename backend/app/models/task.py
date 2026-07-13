@@ -1,9 +1,12 @@
-from sqlalchemy import Column, String, DateTime, Text, Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
-import uuid
 import enum
+import uuid
+
 from app.core.database import Base
+from app.core.datetime_utils import now
+from sqlalchemy import Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import String, Text
+from sqlalchemy.dialects.postgresql import UUID
 
 
 class TaskStatus(str, enum.Enum):
@@ -19,6 +22,6 @@ class Task(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     description = Column(Text, nullable=False)
     status = Column(SQLEnum(TaskStatus), default=TaskStatus.PENDING)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime(timezone=True), default=now)
+    updated_at = Column(DateTime(timezone=True), default=now, onupdate=now)
     result = Column(Text, nullable=True)

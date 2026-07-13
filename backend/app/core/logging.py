@@ -2,7 +2,9 @@ import logging
 import logging.config
 from contextlib import contextmanager
 from contextvars import ContextVar
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import colorlog
 from app.config import get_settings
@@ -28,6 +30,10 @@ settings = get_settings()
 
 
 class ContextFormatter(colorlog.ColoredFormatter):
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=ZoneInfo(settings.timezone))
+        return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
+
     def format(self, record):
         record.trace_id = trace_id_var.get() or "-"
         record.agent_name = agent_name_var.get() or "-"

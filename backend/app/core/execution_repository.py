@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
 from typing import Optional
 
 from app.core.database import SessionLocal
+from app.core.datetime_utils import now
 from app.core.logging import logger
 from app.models.execution import (
     Execution,
@@ -28,7 +28,7 @@ class ExecutionRepository:
                 task_description=task_description,
                 objective=objective,
                 status=ExecutionStatus.RUNNING,
-                started_at=datetime.now(),
+                started_at=now(),
             )
             session.add(execution)
             await session.commit()
@@ -68,9 +68,9 @@ class ExecutionRepository:
                 ExecutionStatus.FAILED,
                 ExecutionStatus.TIMEOUT,
             ]:
-                execution.completed_at = datetime.now()
+                execution.completed_at = now()
 
-            execution.updated_at = datetime.now()
+            execution.updated_at = now()
 
             await session.commit()
             await session.refresh(execution)

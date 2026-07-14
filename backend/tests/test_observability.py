@@ -285,3 +285,169 @@ class TestExecutionRepository:
 
         calls = await execution_repository.get_tool_calls(exec_id)
         assert len(calls) == 1
+
+
+class TestTracedLLMProvider:
+    @pytest.fixture
+    def traced(self):
+        from app.core.llm.base import LLMProvider
+        from app.core.tracing import _TracedLLMProvider
+
+        class FakeWrapped(LLMProvider):
+            async def generate(self, prompt, system=None):
+                return "fake response"
+
+            async def list_models(self):
+                return ["fake"]
+
+        return _TracedLLMProvider(FakeWrapped())
+
+    @pytest.mark.asyncio
+    async def test_generate_success_calls_wrapped_and_records(self, traced):
+        from app.core.logging import execution_id_var, trace_id_var, agent_name_var, step_id_var
+
+        execution_id_var.set(str(uuid4()))
+        trace_id_var.set("test-trace")
+        agent_name_var.set("test-agent")
+        step_id_var.set(str(uuid4()))
+
+        with patch("app.core.tracing._try_record_llm_call") as mock_record:
+            response = await traced.generate(prompt="test prompt", system="system")
+
+        assert response == "fake response"
+        mock_record.assert_called_once()
+        call_kwargs = mock_record.call_args[1]
+        assert call_kwargs["response"] == "fake response"
+        assert call_kwargs["error"] is None
+
+    @pytest.mark.asyncio
+    async def test_generate_failure_records_error_and_re_raises(self, traced):
+        from app.core.llm.base import LLMProvider
+        from app.core.tracing import _TracedLLMProvider
+        from app.core.logging import execution_id_var, trace_id_var
+
+        class FailingWrapped(LLMProvider):
+            async def generate(self, prompt, system=None):
+                raise ValueError("LLM failure")
+
+            async def list_models(self):
+                return []
+
+        failing = _TracedLLMProvider(FailingWrapped())
+        execution_id_var.set(str(uuid4()))
+        trace_id_var.set("test-trace")
+
+        with (
+            patch("app.core.tracing._try_record_llm_call") as mock_record,
+            pytest.raises(ValueError, match="LLM failure"),
+        ):
+            await failing.generate(prompt="test prompt")
+
+        mock_record.assert_called_once()
+        call_kwargs = mock_record.call_args[1]
+        assert call_kwargs["response"] is None
+        assert call_kwargs["error"] == "LLM failure"
+
+    @pytest.mark.asyncio
+    async def test_generate_skips_recording_without_execution_id(self, traced):
+        from app.core.logging import execution_id_var
+
+        execution_id_var.set("")
+
+        with patch("app.core.tracing._try_record_llm_call") as mock_record:
+            response = await traced.generate(prompt="test")
+
+        assert response == "fake response"
+        mock_record.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_list_models_delegates_to_wrapped(self, traced):
+        models = await traced.list_models()
+        assert models == ["fake"]
+
+
+class TestTracedTool:
+    @pytest.fixture
+    def traced_tool(self):
+        from unittest.mock import MagicMock
+        from app.core.tracing import _TracedTool
+        from app.core.tools.base import ToolResult
+
+        mock = MagicMock()
+        mock.name = "test_tool"
+        mock.description = "A test tool"
+
+        async def execute(**kwargs):
+            return ToolResult(success=True, data={"result": "ok"})
+
+        mock.execute = execute
+        return _TracedTool(mock)
+
+    @pytest.mark.asyncio
+    async def test_execute_success_records_tool_call(self, traced_tool):
+        from app.core.logging import execution_id_var, trace_id_var
+
+        execution_id_var.set(str(uuid4()))
+        trace_id_var.set("test-trace")
+
+        with patch("app.core.tracing._try_record_tool_call") as mock_record:
+            result = await traced_tool.execute(param1="value")
+
+        assert result.success is True
+        assert result.data == {"result": "ok"}
+        mock_record.assert_called_once()
+        call_kwargs = mock_record.call_args[1]
+        assert call_kwargs["status"] == "success"
+        assert call_kwargs["tool_name"] == "test_tool"
+        assert call_kwargs["tool_input"] == {"param1": "value"}
+
+    @pytest.mark.asyncio
+    async def test_execute_failure_records_error_and_re_raises(self):
+        from unittest.mock import MagicMock
+        from app.core.tracing import _TracedTool
+        from app.core.logging import execution_id_var
+
+        mock = MagicMock()
+        mock.name = "failing_tool"
+
+        async def execute(**kwargs):
+            raise RuntimeError("tool crash")
+
+        mock.execute = execute
+        failing = _TracedTool(mock)
+
+        execution_id_var.set(str(uuid4()))
+
+        with (
+            patch("app.core.tracing._try_record_tool_call") as mock_record,
+            pytest.raises(RuntimeError, match="tool crash"),
+        ):
+            await failing.execute()
+
+        mock_record.assert_called_once()
+        call_kwargs = mock_record.call_args[1]
+        assert call_kwargs["status"] == "error"
+        assert call_kwargs["error"] == "tool crash"
+
+    @pytest.mark.asyncio
+    async def test_execute_skips_recording_without_execution_id(self, traced_tool):
+        from app.core.logging import execution_id_var
+
+        execution_id_var.set("")
+
+        with patch("app.core.tracing._try_record_tool_call") as mock_record:
+            result = await traced_tool.execute()
+
+        assert result.success is True
+        mock_record.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_input_schema_delegates(self, traced_tool):
+        from unittest.mock import MagicMock
+
+        traced_tool._wrapped.input_schema = MagicMock(return_value={"type": "object"})
+        assert traced_tool.input_schema() == {"type": "object"}
+
+    def test_name_and_description_delegate(self, traced_tool):
+        assert traced_tool.name == "test_tool"
+        assert traced_tool.description == "A test tool"

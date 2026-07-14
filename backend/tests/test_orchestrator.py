@@ -5,8 +5,21 @@ import pytest
 
 from app.core.orchestrator import (
     MAX_TOTAL_STEPS,
+    DEGRADATION_THRESHOLD,
+    _next_agent,
     build_orchestrator_graph,
+    check_degradation,
+    check_max_steps,
+    re_plan,
+    route_after_check,
+    route_after_replan,
+    route_from_data,
+    route_from_planner,
+    route_from_research,
+    run_data,
     run_planner,
+    run_research,
+    run_synthesis,
     save_checkpoint,
 )
 from app.core.state_manager import state_manager
@@ -183,3 +196,461 @@ async def test_checkpoint_persistence(mock_redis):
 
     assert result["checkpoint_idx"] is not None
     mock_redis.assert_awaited_once()
+
+
+# =============================================================================
+# Agent error paths — planner, research, data, synthesis
+# =============================================================================
+
+async def _agent_error_state():
+    return {
+        **INITIAL_STATE,
+        "execution_id": str(uuid4()),
+        "objective": "Research AI in healthcare",
+        "plan_steps": [
+            {
+                "step": 1,
+                "action": "Analyze AI adoption data",
+                "expected_output": "Analysis report",
+                "step_type": "analysis",
+            },
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_planner_graph_exception():
+    class FailingGraph:
+        async def ainvoke(self, state):
+            raise RuntimeError("Planner crashed")
+
+    with patch("app.core.orchestrator.build_planner_graph", return_value=FailingGraph()):
+        result = await run_planner({
+            "task_description": "Research AI in healthcare",
+        })
+
+    assert result.get("error") is not None
+    assert "Planner failed" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_planner_result_error():
+    class ErrorGraph:
+        async def ainvoke(self, state):
+            return {"error": "Planner validation error"}
+
+    with patch("app.core.orchestrator.build_planner_graph", return_value=ErrorGraph()):
+        result = await run_planner({
+            "task_description": "Research AI in healthcare",
+        })
+
+    assert result.get("error") is not None
+    assert "Planner validation error" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_research_graph_exception():
+    class FailingGraph:
+        async def ainvoke(self, state):
+            raise RuntimeError("Research crashed")
+
+    state = await _agent_error_state()
+    with patch("app.core.orchestrator.build_research_graph", return_value=FailingGraph()):
+        result = await run_research(state)
+
+    assert result.get("error") is not None
+    assert "Research failed" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_research_result_error():
+    class ErrorGraph:
+        async def ainvoke(self, state):
+            return {"error": "Research query failed"}
+
+    state = await _agent_error_state()
+    with patch("app.core.orchestrator.build_research_graph", return_value=ErrorGraph()):
+        result = await run_research(state)
+
+    assert result.get("error") is not None
+    assert "Research query failed" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_research_skipped_without_plan_steps():
+    state = {**INITIAL_STATE, "objective": "test", "plan_steps": None}
+    result = await run_research(state)
+
+    assert result.get("error") is None
+    assert result.get("research_findings") is None
+
+
+@pytest.mark.asyncio
+async def test_run_data_graph_exception():
+    class FailingGraph:
+        async def ainvoke(self, state):
+            raise RuntimeError("Data crashed")
+
+    state = await _agent_error_state()
+    with patch("app.core.orchestrator.build_data_graph", return_value=FailingGraph()):
+        result = await run_data(state)
+
+    assert result.get("error") is not None
+    assert "Data agent failed" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_data_result_error():
+    class ErrorGraph:
+        async def ainvoke(self, state):
+            return {"error": "SQL execution error"}
+
+    state = await _agent_error_state()
+    with patch("app.core.orchestrator.build_data_graph", return_value=ErrorGraph()):
+        result = await run_data(state)
+
+    assert result.get("error") is not None
+    assert "SQL execution error" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_data_skips_when_not_needed():
+    state = await _agent_error_state()
+    state["plan_steps"] = [{"action": "Define scope", "step_type": "scoping"}]
+    result = await run_data(state)
+
+    assert result.get("error") is None
+    assert result.get("data_results") is None
+
+
+@pytest.mark.asyncio
+async def test_run_synthesis_graph_exception():
+    class FailingGraph:
+        async def ainvoke(self, state):
+            raise RuntimeError("Synthesis crashed")
+
+    state = await _agent_error_state()
+    state["report"] = None
+    with patch("app.core.orchestrator.build_synthesis_graph", return_value=FailingGraph()):
+        result = await run_synthesis(state)
+
+    assert result.get("error") is not None
+    assert "Synthesis failed" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_synthesis_result_error():
+    class ErrorGraph:
+        async def ainvoke(self, state):
+            return {"error": "Synthesis validation failed"}
+
+    state = await _agent_error_state()
+    with patch("app.core.orchestrator.build_synthesis_graph", return_value=ErrorGraph()):
+        result = await run_synthesis(state)
+
+    assert result.get("error") is not None
+    assert "Synthesis validation failed" in result["error"]
+
+
+# =============================================================================
+# Checkpoint failure
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_save_checkpoint_redis_failure(mock_redis):
+    mock_redis.side_effect = RuntimeError("Redis unreachable")
+
+    state = {**INITIAL_STATE}
+    result = await save_checkpoint(state)
+
+    assert result.get("error") is not None
+    assert "Checkpoint save failed" in result["error"]
+
+
+# =============================================================================
+# Re-plan logic
+# =============================================================================
+
+
+class FakeReplanProvider:
+    def __init__(self, response: str | None = None):
+        self.response = response or '{"decision": "abort", "reason": "testing"}'
+
+    async def generate(self, prompt: str, system: str | None = None) -> str:
+        return self.response
+
+    async def list_models(self) -> list[str]:
+        return ["fake"]
+
+
+def _error_state(**overrides) -> dict:
+    return {
+        **INITIAL_STATE,
+        "error": "Agent failed",
+        "current_agent": "research",
+        "execution_id": str(uuid4()),
+        "consecutive_failures": 0,
+        "last_failure_agent": None,
+        **overrides,
+    }
+
+
+@pytest.mark.asyncio
+async def test_replan_skipped_when_no_error():
+    state = {**INITIAL_STATE, "error": None}
+    result = await re_plan(state)
+    assert result is state
+
+
+@pytest.mark.asyncio
+async def test_replan_decision_retry_same_agent():
+    state = _error_state(
+        consecutive_failures=1,
+        last_failure_agent="research",
+    )
+    provider = FakeReplanProvider('{"decision": "retry", "reason": "try again"}')
+
+    with patch("app.core.orchestrator.get_llm_provider", return_value=provider):
+        result = await re_plan(state)
+
+    assert result.get("error") is None
+    assert result["consecutive_failures"] == 2  # same agent → increment
+    assert result["last_failure_agent"] == "research"
+
+
+@pytest.mark.asyncio
+async def test_replan_decision_retry_different_agent():
+    state = _error_state(
+        consecutive_failures=2,
+        last_failure_agent="planner",
+    )
+    provider = FakeReplanProvider('{"decision": "retry", "reason": "try again"}')
+
+    with patch("app.core.orchestrator.get_llm_provider", return_value=provider):
+        result = await re_plan(state)
+
+    assert result.get("error") is None
+    assert result["consecutive_failures"] == 1  # different agent → reset to 1
+
+
+@pytest.mark.asyncio
+async def test_replan_decision_skip():
+    state = _error_state()
+    provider = FakeReplanProvider('{"decision": "skip", "reason": "skip it"}')
+
+    with patch("app.core.orchestrator.get_llm_provider", return_value=provider):
+        result = await re_plan(state)
+
+    assert result.get("error") is None
+    assert result["consecutive_failures"] == 0
+    assert result["last_failure_agent"] is None
+    assert result["current_agent"] != "research"  # advanced to next
+
+
+@pytest.mark.asyncio
+async def test_replan_decision_abort():
+    state = _error_state()
+    provider = FakeReplanProvider('{"decision": "abort", "reason": "cannot recover"}')
+
+    with patch("app.core.orchestrator.get_llm_provider", return_value=provider):
+        result = await re_plan(state)
+
+    assert result.get("error") is not None  # error preserved
+
+
+@pytest.mark.asyncio
+async def test_replan_llm_failure_defaults_to_abort():
+    class BrokenProvider:
+        async def generate(self, prompt, system=None):
+            raise ValueError("LLM unavailable")
+
+        async def list_models(self):
+            return []
+
+    state = _error_state()
+    with patch("app.core.orchestrator.get_llm_provider", return_value=BrokenProvider()):
+        result = await re_plan(state)
+
+    assert result.get("error") is not None  # aborted, error kept
+
+
+@pytest.mark.asyncio
+async def test_replan_llm_returns_invalid_json():
+    state = _error_state()
+    provider = FakeReplanProvider("this is not json")
+
+    with patch("app.core.orchestrator.get_llm_provider", return_value=provider):
+        result = await re_plan(state)
+
+    assert result.get("error") is not None  # defaults to abort
+
+
+# =============================================================================
+# Degradation detection
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_check_degradation_below_threshold():
+    state = {
+        **INITIAL_STATE,
+        "execution_id": str(uuid4()),
+        "consecutive_failures": DEGRADATION_THRESHOLD - 1,
+        "current_agent": "research",
+    }
+    result = await check_degradation(state)
+
+    assert result.get("error") is None
+    assert result is state
+
+
+@pytest.mark.asyncio
+async def test_check_degradation_triggers_abort():
+    state = {
+        **INITIAL_STATE,
+        "execution_id": str(uuid4()),
+        "consecutive_failures": DEGRADATION_THRESHOLD,
+        "current_agent": "research",
+    }
+    result = await check_degradation(state)
+
+    assert result.get("error") is not None
+    assert "Aborting" in result["error"]
+    assert str(DEGRADATION_THRESHOLD) in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_check_degradation_triggers_above_threshold():
+    state = {
+        **INITIAL_STATE,
+        "execution_id": str(uuid4()),
+        "consecutive_failures": DEGRADATION_THRESHOLD + 2,
+        "current_agent": "planner",
+    }
+    result = await check_degradation(state)
+
+    assert result.get("error") is not None
+    assert "Aborting" in result["error"]
+
+
+# =============================================================================
+# Max steps check
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_check_max_steps_below_limit():
+    state = {
+        **INITIAL_STATE, "total_steps": MAX_TOTAL_STEPS - 1,
+        "execution_id": str(uuid4()),
+    }
+    result = await check_max_steps(state)
+    assert result.get("error") is None
+
+
+@pytest.mark.asyncio
+async def test_check_max_steps_at_limit():
+    state = {
+        **INITIAL_STATE, "total_steps": MAX_TOTAL_STEPS,
+        "execution_id": str(uuid4()),
+    }
+    result = await check_max_steps(state)
+    assert result.get("error") is not None
+    assert "limit reached" in result["error"].lower()
+
+
+# =============================================================================
+# Next agent routing
+# =============================================================================
+
+
+def test_next_agent_unknown_current():
+    assert _next_agent("unknown", {}) == "synthesis"
+
+
+def test_next_agent_last_in_order():
+    assert _next_agent("synthesis", {}) == "synthesis"
+
+
+def test_next_agent_research_skips_data_when_not_needed():
+    state = {
+        "plan_steps": [{"action": "Define scope", "step_type": "scoping"}],
+    }
+    assert _next_agent("research", state) == "synthesis"
+
+
+def test_next_agent_research_goes_to_data_when_needed():
+    state = {
+        "plan_steps": [{"action": "Analyze results", "step_type": "analysis"}],
+    }
+    assert _next_agent("research", state) == "data"
+
+
+def test_next_agent_planner_goes_to_research():
+    state = {"plan_steps": [{"action": "Analyze", "step_type": "analysis"}]}
+    assert _next_agent("planner", state) == "research"
+
+
+def test_next_agent_data_goes_to_synthesis():
+    assert _next_agent("data", {}) == "synthesis"
+
+
+# =============================================================================
+# Routing functions
+# =============================================================================
+
+
+def test_route_from_planner_error():
+    state = {"error": "something wrong"}
+    assert route_from_planner(state) == "error"
+
+
+def test_route_from_planner_ok():
+    state = {"error": None}
+    assert route_from_planner(state) == "research"
+
+
+def test_route_from_research_error():
+    state = {"error": "something wrong"}
+    assert route_from_research(state) == "error"
+
+
+def test_route_from_research_data_needed():
+    state = {
+        "error": None,
+        "plan_steps": [{"action": "Analyze data", "step_type": "analysis"}],
+    }
+    assert route_from_research(state) == "data"
+
+
+def test_route_from_research_skip_data():
+    state = {
+        "error": None,
+        "plan_steps": [{"action": "Define scope", "step_type": "scoping"}],
+    }
+    assert route_from_research(state) == "synthesis"
+
+
+def test_route_from_data_error():
+    state = {"error": "something wrong"}
+    assert route_from_data(state) == "error"
+
+
+def test_route_from_data_ok():
+    state = {"error": None}
+    assert route_from_data(state) == "synthesis"
+
+
+def test_route_after_replan_error():
+    state = {"error": "failed"}
+    assert route_after_replan(state) == "end"
+
+
+def test_route_after_replan_known_agent():
+    state = {"current_agent": "research"}
+    assert route_after_replan(state) == "run_research"
+
+
+def test_route_after_replan_unknown_agent():
+    state = {"current_agent": "unknown"}
+    assert route_after_replan(state) == "end"

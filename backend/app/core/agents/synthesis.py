@@ -74,7 +74,9 @@ async def validate_report(state: SynthesisState) -> SynthesisState:
 
     if not state.get("report"):
         logger.warning("No report was generated on attempt %d", iteration)
-        return {**state, "error": "No report was generated"}
+        if iteration >= MAX_ITERATIONS:
+            return {**state, "error": "No report was generated"}
+        return state
 
     logger.info("Validation completed successfully")
     return {**state, "error": None}  # Limpia errores previos de reintentos

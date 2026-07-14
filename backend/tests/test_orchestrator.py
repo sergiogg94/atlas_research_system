@@ -7,6 +7,8 @@ from app.core.orchestrator import (
     MAX_TOTAL_STEPS,
     DEGRADATION_THRESHOLD,
     _next_agent,
+    _record_execution_step,
+    _sanitize_for_json,
     build_orchestrator_graph,
     check_degradation,
     check_max_steps,
@@ -654,3 +656,168 @@ def test_route_after_replan_known_agent():
 def test_route_after_replan_unknown_agent():
     state = {"current_agent": "unknown"}
     assert route_after_replan(state) == "end"
+
+
+# =============================================================================
+# _sanitize_for_json — edge cases
+# =============================================================================
+
+
+def test_sanitize_for_json_passes_clean_dict():
+    d = {"key": "value", "num": 42, "flag": True, "nothing": None}
+    assert _sanitize_for_json(d) == d
+
+
+def test_sanitize_for_json_mixed_simple_and_complex():
+    """dict with both serializable and non-serializable values."""
+    d = {"simple": "ok", "num": 1, "flag": False, "bad": object()}
+    cleaned = _sanitize_for_json(d)
+    assert cleaned["simple"] == "ok"
+    assert cleaned["num"] == 1
+    assert cleaned["flag"] is False
+    assert isinstance(cleaned["bad"], str)
+
+
+# =============================================================================
+# _build_data_context — context truncation
+# =============================================================================
+
+from app.core.orchestrator import _build_data_context
+
+
+def test_build_data_context_truncates_when_over_5000_chars():
+    long_finding = {
+        "step": 1,
+        "query": "q",
+        "summary": "x" * 6000,
+    }
+    state = {
+        "objective": "test",
+        "plan": {"objective": "plan obj"},
+        "research_findings": [long_finding],
+    }
+    context = _build_data_context(state)
+    assert len(context) <= 5000 + len("\n\n[Context truncated...]")
+    assert "Context truncated" in context
+
+
+def test_build_data_context_without_plan():
+    state = {"objective": "test", "research_findings": []}
+    context = _build_data_context(state)
+    assert context.startswith("# Objective")
+
+
+def test_build_data_context_without_findings():
+    state = {"objective": "test", "plan": {"objective": "plan"}}
+    context = _build_data_context(state)
+    assert "# Plan" in context
+    assert "# Research Findings" not in context
+
+
+# =============================================================================
+# route_after_check — fallback edge case
+# =============================================================================
+
+
+def test_route_after_check_falls_to_end_for_unknown_agent():
+    state = {"current_agent": "unknown", "error": None}
+    assert route_after_check(state) == "end"
+
+
+# =============================================================================
+# build_orchestrator_graph — compilation failure
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_build_orchestrator_graph_compilation_failure():
+    with patch(
+        "app.core.orchestrator.StateGraph.compile",
+        side_effect=ValueError("Graph validation error"),
+    ):
+        with pytest.raises(ValueError, match="Graph validation error"):
+            build_orchestrator_graph()
+
+
+def test_sanitize_for_json_converts_non_serializable_values():
+    d = {"bad": object()}
+    cleaned = _sanitize_for_json(d)
+    assert isinstance(cleaned["bad"], str)
+    assert "object" in cleaned["bad"]
+
+
+def test_sanitize_for_json_handles_nested_dicts():
+    d = {"nested": {"inner": object()}}
+    cleaned = _sanitize_for_json(d)
+    assert "object" in cleaned["nested"]["inner"]
+
+
+def test_sanitize_for_json_handles_lists():
+    d = {"items": [1, "two", object()]}
+    cleaned = _sanitize_for_json(d)
+    assert cleaned["items"][0] == 1
+    assert cleaned["items"][1] == "two"
+    assert isinstance(cleaned["items"][2], str)
+
+
+def test_sanitize_for_json_handles_nested_dicts_in_lists():
+    d = {"items": [{"inner": object()}, {"inner": "ok"}]}
+    cleaned = _sanitize_for_json(d)
+    assert "object" in cleaned["items"][0]["inner"]
+    assert cleaned["items"][1]["inner"] == "ok"
+
+
+# =============================================================================
+# _record_execution_step — edge cases
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_record_execution_step_without_execution_id():
+    state = {**INITIAL_STATE, "execution_id": None}
+    result = await _record_execution_step(
+        state=state, agent_name="test", step_type="test",
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_record_execution_step_with_invalid_execution_id():
+    state = {**INITIAL_STATE, "execution_id": "not-a-uuid"}
+    result = await _record_execution_step(
+        state=state, agent_name="test", step_type="test",
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_record_execution_step_repository_failure():
+    """Should log warning and return None when add_step raises."""
+    state = {**INITIAL_STATE, "execution_id": str(uuid4())}
+    mock_add_step = AsyncMock(side_effect=Exception("DB down"))
+
+    with patch("app.core.orchestrator.execution_repository.add_step", mock_add_step):
+        result = await _record_execution_step(
+            state=state, agent_name="test", step_type="test",
+        )
+
+    assert result is None
+
+
+# =============================================================================
+# Agent early-return when state has error
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_run_planner_returns_early_when_state_has_error():
+    state = {"task_description": "test", "error": "prior failure"}
+    result = await run_planner(state)
+    assert result["error"] == "prior failure"
+
+
+@pytest.mark.asyncio
+async def test_run_data_returns_early_when_state_has_error():
+    state = {**INITIAL_STATE, "error": "prior failure"}
+    result = await run_data(state)
+    assert result["error"] == "prior failure"

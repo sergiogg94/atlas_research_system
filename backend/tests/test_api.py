@@ -533,3 +533,62 @@ class TestHistory:
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
+
+
+class TestErrorScenarios:
+    @pytest.mark.asyncio
+    async def test_empty_task_description(self, client):
+        response = await client.post(
+            "/api/v1/execute-task",
+            json={"task_description": ""},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_task_too_short(self, client):
+        response = await client.post(
+            "/api/v1/execute-task",
+            json={"task_description": "Hi"},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_malformed_trace_id_in_url(self, client):
+        mock_repo = AsyncMock()
+        mock_repo.get_execution_by_trace_id.return_value = None
+
+        with patch("app.api.routes.history.execution_repository", mock_repo):
+            response = await client.get("/api/v1/tasks/con-espacios")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_executions(self, client):
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke.return_value = {
+            "objective": "",
+            "plan": None,
+            "research_findings": [],
+            "data_results": [],
+            "report": None,
+            "error": None,
+            "total_steps": 0,
+        }
+
+        async def post_task():
+            with patch(
+                "app.api.routes.orchestrator.build_orchestrator_graph",
+                return_value=mock_graph,
+            ):
+                return await client.post(
+                    "/api/v1/execute-task",
+                    json={"task_description": "Valid task with enough length"},
+                )
+
+        r1, r2 = await asyncio.gather(post_task(), post_task())
+
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        d1, d2 = r1.json(), r2.json()
+        assert d1["task_id"] != d2["task_id"]

@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from app.core.datetime_utils import now
-from pydantic import BaseModel, Field
 
 
 ## Response base models
@@ -31,5 +32,5 @@ class ErrorResponse(BaseModel):
     message: str = Field(
         ..., description="Error message", json_schema_extra={"example": "Invalid input"}
     )
-    details: Optional[dict] = Field(None, description="Additional error details")
+    details: dict | None = Field(None, description="Additional error details")
     timestamp: datetime = Field(default_factory=now, description="Response timestamp")

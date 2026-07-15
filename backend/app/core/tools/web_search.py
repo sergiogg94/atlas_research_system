@@ -1,6 +1,7 @@
+from ddgs import DDGS
+
 from app.core.logging import logger
 from app.core.tools.base import BaseTool, ToolResult
-from ddgs import DDGS
 
 
 class WebSearchTool(BaseTool):

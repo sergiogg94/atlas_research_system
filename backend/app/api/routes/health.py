@@ -29,7 +29,7 @@ async def health_check(settings: Settings = Depends(get_settings)):
         await r.ping()
         services["redis"] = "healthy"
         await r.close()
-    except Exception as e:
+    except Exception:
         services["redis"] = "unhealthy"
         overall_status = "degraded"
 
@@ -38,7 +38,7 @@ async def health_check(settings: Settings = Depends(get_settings)):
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         services["database"] = "healthy"
-    except Exception as e:
+    except Exception:
         services["database"] = "unhealthy"
         overall_status = "degraded"
 

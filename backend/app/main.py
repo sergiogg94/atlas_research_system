@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
-from app.api.routes import data, health, llm, orchestrator, plan, research, history
-from app.core.logging import logger
-from app.core.middleware import TraceIDMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes import data, health, history, llm, orchestrator, plan, research
+from app.core.logging import logger
+from app.core.middleware import TraceIDMiddleware
 
 
 @asynccontextmanager

@@ -1,22 +1,23 @@
 import json
-from typing import Optional, TypedDict
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
 from app.core.prompts import get_prompt
 from app.core.tools import get_tool
-from langgraph.graph import END, StateGraph
 
 
 class DataState(TypedDict):
     task: str  # Description of the data task
     context: str  # Context from previous research
-    code: Optional[str]  # Generated Python code
-    query: Optional[str]  # SQL query
-    execution_result: Optional[dict]
-    error: Optional[str]
+    code: str | None  # Generated Python code
+    query: str | None  # SQL query
+    execution_result: dict | None
+    error: str | None
     iteration: int  # Iteration counter (max 3)
-    analysis: Optional[str]  # Result of the analysis
+    analysis: str | None  # Result of the analysis
     trace_id: str
 
 

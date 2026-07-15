@@ -1,17 +1,16 @@
-from fastapi import APIRouter, Query, HTTPException
-
 from app.core.execution_repository import execution_repository
 from app.schemas.history import (
+    ExecutionDetail,
     ExecutionDetailResponse,
     ExecutionListResponse,
-    ExecutionSummary,
-    ExecutionMetricsResponse,
     ExecutionMetrics,
-    ExecutionDetail,
-    StepDetail,
+    ExecutionMetricsResponse,
+    ExecutionSummary,
     LLMCallDetail,
+    StepDetail,
     ToolCallDetail,
 )
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter()
 

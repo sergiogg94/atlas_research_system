@@ -1,8 +1,9 @@
 import uuid
 
-from app.core.logging import trace_id_var
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+
+from app.core.logging import trace_id_var
 
 
 class TraceIDMiddleware(BaseHTTPMiddleware):

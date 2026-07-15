@@ -1,19 +1,20 @@
 import json
-from typing import Optional, TypedDict
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
+from pydantic import ValidationError
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
 from app.core.prompts import get_prompt
 from app.schemas.plan import Plan
-from langgraph.graph import END, StateGraph
-from pydantic import ValidationError
 
 
 class PlannerState(TypedDict):
     task_description: str
-    plan: Optional[Plan]
-    error: Optional[str]
-    llm_response: Optional[str]
+    plan: Plan | None
+    error: str | None
+    llm_response: str | None
     trace_id: str
 
 

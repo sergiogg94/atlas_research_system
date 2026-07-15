@@ -1,14 +1,14 @@
 import logging
 
 import httpx
-from app.core.logging import logger
 from tenacity import (
     before_sleep_log,
-    retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
+
+from app.core.logging import logger
 
 
 def _before(retry_state):

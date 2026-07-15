@@ -1,12 +1,12 @@
 import enum
 import uuid
 
+from sqlalchemy import Column, DateTime, Text
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import UUID
+
 from app.core.database import Base
 from app.core.datetime_utils import now
-from sqlalchemy import Column, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import String, Text
-from sqlalchemy.dialects.postgresql import UUID
 
 
 class TaskStatus(str, enum.Enum):

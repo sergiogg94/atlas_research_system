@@ -29,7 +29,7 @@ async def execute_data_task(request: DataRequest):
             ),
             timeout=180.0,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("Data task timed out")
         raise HTTPException(status_code=504, detail="Data task timed out")
 

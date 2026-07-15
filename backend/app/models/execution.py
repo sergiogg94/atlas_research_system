@@ -1,12 +1,12 @@
 import uuid
 from enum import Enum
 
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import UUID
+
 from app.core.database import Base
 from app.core.datetime_utils import now
-from sqlalchemy import JSON, Column, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 
 
 class ExecutionStatus(str, Enum):

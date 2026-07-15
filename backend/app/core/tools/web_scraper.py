@@ -1,7 +1,8 @@
 import httpx
+from bs4 import BeautifulSoup
+
 from app.core.logging import logger
 from app.core.tools.base import BaseTool, ToolResult
-from bs4 import BeautifulSoup
 
 
 class WebScraperTool(BaseTool):

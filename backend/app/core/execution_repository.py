@@ -1,5 +1,6 @@
 import uuid
-from typing import Optional
+
+from sqlalchemy import desc, func, select
 
 from app.core.database import SessionLocal
 from app.core.datetime_utils import now
@@ -12,7 +13,6 @@ from app.models.execution import (
     LLMCall,
     ToolCallRecord,
 )
-from sqlalchemy import desc, func, select
 
 
 class ExecutionRepository:
@@ -41,11 +41,11 @@ class ExecutionRepository:
     async def update_execution(
         self,
         execution_id: uuid.UUID,
-        status: Optional[ExecutionStatus] = None,
-        objective: Optional[str] = None,
-        total_steps: Optional[int] = None,
-        error: Optional[str] = None,
-        report: Optional[str] = None,
+        status: ExecutionStatus | None = None,
+        objective: str | None = None,
+        total_steps: int | None = None,
+        error: str | None = None,
+        report: str | None = None,
     ) -> None:
         """Update an existing execution record in the database."""
         async with SessionLocal() as session:
@@ -105,19 +105,19 @@ class ExecutionRepository:
     # Query Methods
     ###########################################################################
 
-    async def get_execution_by_trace_id(self, trace_id: str) -> Optional[Execution]:
+    async def get_execution_by_trace_id(self, trace_id: str) -> Execution | None:
         async with SessionLocal() as session:
             result = await session.execute(
                 select(Execution).where(Execution.trace_id == trace_id)
             )
             return result.scalar_one_or_none()
 
-    async def get_execution_by_id(self, execution_id: uuid.UUID) -> Optional[Execution]:
+    async def get_execution_by_id(self, execution_id: uuid.UUID) -> Execution | None:
         async with SessionLocal() as session:
             return await session.get(Execution, execution_id)
 
     async def list_executions(
-        self, page: int = 1, page_size: int = 20, status: Optional[str] = None
+        self, page: int = 1, page_size: int = 20, status: str | None = None
     ) -> tuple[list[Execution], int]:
         async with SessionLocal() as session:
             query = select(Execution)
@@ -163,7 +163,7 @@ class ExecutionRepository:
 
     async def get_metrics(
         self, trace_id: str
-    ) -> Optional[ExecutionMetricsCache]:
+    ) -> ExecutionMetricsCache | None:
         async with SessionLocal() as session:
             result = await session.execute(
                 select(ExecutionMetricsCache).where(

@@ -1,8 +1,8 @@
 from app.core.tools.base import BaseTool
 from app.core.tools.python_executor import PythonExecutorTool
+from app.core.tools.sql_query import SQLQueryTool
 from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
-from app.core.tools.sql_query import SQLQueryTool
 from app.core.tracing import wrap_tool
 
 _tools: dict[str, BaseTool] = {}

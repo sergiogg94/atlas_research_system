@@ -1,5 +1,7 @@
-from typing import Optional, TypedDict
+from typing import TypedDict
 from uuid import UUID, uuid4
+
+from langgraph.graph import END, StateGraph
 
 from app.core.agents.data import build_data_graph
 from app.core.agents.planner import build_planner_graph
@@ -16,28 +18,27 @@ from app.core.logging import (
 )
 from app.core.state_manager import state_manager
 from app.models.execution import ExecutionStatus
-from langgraph.graph import END, StateGraph
 
 
 class OrchestratorState(TypedDict):
     task_description: str  # Originl input
     objective: str  # From plam
-    plan: Optional[dict]  # Planner's output
-    plan_steps: Optional[list]  # Plan steps
-    research_findings: Optional[list]  # Research Output
-    data_results: Optional[list]  # Data Output
-    report: Optional[str]  # Synthesis Output
-    error: Optional[str]
+    plan: dict | None  # Planner's output
+    plan_steps: list | None  # Plan steps
+    research_findings: list | None  # Research Output
+    data_results: list | None  # Data Output
+    report: str | None  # Synthesis Output
+    error: str | None
     current_agent: str  # "planner" | "research" | "data" | "synthesis"
     step_index: int  # Current step index
     total_steps: int  # Total of executed steps
     max_steps: int  # Scecurity limit
-    checkpoint_idx: Optional[str]  # Redis checkpoint id
+    checkpoint_idx: str | None  # Redis checkpoint id
     consecutive_failures: int  # Degradation detection
-    last_failure_agent: Optional[str]  # Last agent that failed
+    last_failure_agent: str | None  # Last agent that failed
     trace_id: str  # Unique trace id for logging and tracing
-    execution_id: Optional[str]  # Database execution ID
-    last_step_latency_ms: Optional[int]  # Latency of last step in milliseconds
+    execution_id: str | None  # Database execution ID
+    last_step_latency_ms: int | None  # Latency of last step in milliseconds
 
 
 MAX_TOTAL_STEPS = 50
@@ -117,11 +118,11 @@ async def _record_execution_step(
     state: OrchestratorState,
     agent_name: str,
     step_type: str,
-    input_summary: Optional[str] = None,
-    output_summary: Optional[str] = None,
+    input_summary: str | None = None,
+    output_summary: str | None = None,
     status: str = "completed",
-    error: Optional[str] = None,
-    latency_ms: Optional[int] = None,
+    error: str | None = None,
+    latency_ms: int | None = None,
 ):
     """Persist a step record for the current execution when an execution_id exists."""
     execution_id = state.get("execution_id")

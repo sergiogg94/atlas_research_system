@@ -1,6 +1,3 @@
-import json
-from typing import Optional
-
 from app.core.redis_client import redis_client
 
 
@@ -9,7 +6,7 @@ class StateManager:
     async def save_research_state(self, task_id: str, state: dict, ttl: int = 3600):
         await redis_client.set_json(f"research:{task_id}", state, ex=ttl)
 
-    async def get_research_state(self, task_id: str) -> Optional[dict]:
+    async def get_research_state(self, task_id: str) -> dict | None:
         return await redis_client.get_json(f"research:{task_id}")
 
     async def delete_research_state(self, task_id: str):

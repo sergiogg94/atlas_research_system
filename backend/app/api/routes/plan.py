@@ -1,5 +1,3 @@
-import asyncio
-
 from app.core.agents.planner import build_planner_graph
 from app.core.logging import logger
 from app.schemas.plan import PlanRequest, PlanResponse
@@ -27,7 +25,7 @@ async def create_plan(request: PlanRequest):
                 "task_description": request.task_description,
             }
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("Planner timed out")
         raise HTTPException(status_code=504, detail="Planner timed out")
 

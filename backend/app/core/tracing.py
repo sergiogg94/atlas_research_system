@@ -1,6 +1,6 @@
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from app.core.execution_repository import execution_repository
 from app.core.llm.base import LLMProvider
@@ -17,7 +17,7 @@ class _TracedLLMProvider(LLMProvider):
     def __init__(self, wrapped: LLMProvider) -> None:
         self._wrapped = wrapped
 
-    async def generate(self, prompt: str, system: Optional[str] = None) -> str:
+    async def generate(self, prompt: str, system: str | None = None) -> str:
         execution_id = execution_id_var.get()
         trace_id = trace_id_var.get()
         agent_name = agent_name_var.get()
@@ -66,11 +66,11 @@ def _try_record_llm_call(
     execution_id: str,
     trace_id: str,
     agent_name: str,
-    step_id: Optional[str],
+    step_id: str | None,
     prompt: str,
-    system: Optional[str],
-    response: Optional[str],
-    error: Optional[str],
+    system: str | None,
+    response: str | None,
+    error: str | None,
     latency_ms: int,
 ) -> None:
     try:
@@ -178,12 +178,12 @@ def _try_record_tool_call(
     execution_id: str,
     trace_id: str,
     agent_name: str,
-    step_id: Optional[str],
+    step_id: str | None,
     tool_name: str,
     tool_input: dict,
-    output_preview: Optional[str],
+    output_preview: str | None,
     status: str,
-    error: Optional[str],
+    error: str | None,
     latency_ms: int,
 ) -> None:
     try:

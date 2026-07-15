@@ -1,20 +1,20 @@
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 from app.schemas.base import BaseResponse
-from pydantic import BaseModel
 
 
 class ExecutionSummary(BaseModel):
     id: str
     trace_id: str
     task_description: str
-    objective: Optional[str]
+    objective: str | None
     status: str
     total_steps: int
-    error: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    error: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -23,7 +23,7 @@ class ExecutionDetail(ExecutionSummary):
     steps: list["StepDetail"] = []
     llm_calls: list["LLMCallDetail"] = []
     tool_calls: list["ToolCallDetail"] = []
-    report: Optional[str]
+    report: str | None
 
 
 class StepDetail(BaseModel):
@@ -31,58 +31,58 @@ class StepDetail(BaseModel):
     execution_id: str
     trace_id: str
     agent_name: str
-    step_type: Optional[str]
-    input_summary: Optional[str]
-    output_summary: Optional[str]
+    step_type: str | None
+    input_summary: str | None
+    output_summary: str | None
     status: str
-    error: Optional[str]
-    latency_ms: Optional[int]
+    error: str | None
+    latency_ms: int | None
     created_at: datetime
 
 
 class LLMCallDetail(BaseModel):
     id: str
     execution_id: str
-    step_id: Optional[str]
+    step_id: str | None
     trace_id: str
     agent_name: str
-    prompt_preview: Optional[str]
-    system_prompt: Optional[str]
-    user_prompt: Optional[str]
-    response: Optional[str]
-    model: Optional[str]
-    latency_ms: Optional[int]
-    estimated_tokens_input: Optional[int]
-    estimated_tokens_output: Optional[int]
+    prompt_preview: str | None
+    system_prompt: str | None
+    user_prompt: str | None
+    response: str | None
+    model: str | None
+    latency_ms: int | None
+    estimated_tokens_input: int | None
+    estimated_tokens_output: int | None
     created_at: datetime
 
 
 class ToolCallDetail(BaseModel):
     id: str
     execution_id: str
-    step_id: Optional[str]
+    step_id: str | None
     trace_id: str
     tool_name: str
     status: str
-    input: Optional[str]
-    output_preview: Optional[str]
-    error: Optional[str]
-    latency_ms: Optional[int]
+    input: str | None
+    output_preview: str | None
+    error: str | None
+    latency_ms: int | None
     created_at: datetime
 
 
 class ExecutionMetrics(BaseModel):
     execution_id: str
     trace_id: str
-    total_duration_ms: Optional[int]
+    total_duration_ms: int | None
     total_llm_calls: int
     total_tool_calls: int
     total_steps: int
     total_tokens_input: int
     total_tokens_output: int
     estimated_cost_usd: float
-    avg_step_latency_ms: Optional[float]
-    avg_llm_latency_ms: Optional[float]
+    avg_step_latency_ms: float | None
+    avg_llm_latency_ms: float | None
     error_count: int
 
 

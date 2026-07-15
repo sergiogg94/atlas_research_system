@@ -1,11 +1,11 @@
-from typing import Optional, TypedDict
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
 from app.core.prompts import get_prompt
 from app.core.tools import get_tool
-from app.schemas.plan import Plan
-from langgraph.graph import END, StateGraph
 
 
 class ResearchState(TypedDict):
@@ -13,10 +13,10 @@ class ResearchState(TypedDict):
     steps: list  # Stepts taken/completed
     current_step: int  # Current step
     findings: list  # Findings from research
-    error: Optional[str]  # Error message if any step fails
-    current_query: Optional[str]  # Current query being researched
-    search_results: Optional[list]  # Results from web search
-    scraped_contents: Optional[list]  # Scraped content from search results
+    error: str | None  # Error message if any step fails
+    current_query: str | None  # Current query being researched
+    search_results: list | None  # Results from web search
+    scraped_contents: list | None  # Scraped content from search results
     trace_id: str
 
 

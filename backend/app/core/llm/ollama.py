@@ -1,11 +1,10 @@
-from typing import Optional
-
 import httpx
+from tenacity import retry
+
 from app.config import get_settings
 from app.core.llm.base import LLMProvider
 from app.core.llm.retry import retry_config
 from app.core.logging import logger
-from tenacity import retry
 
 
 class OllamaProvider(LLMProvider):
@@ -20,7 +19,7 @@ class OllamaProvider(LLMProvider):
         )
 
     @retry(**retry_config)
-    async def generate(self, prompt: str, system: Optional[str] = None) -> str:
+    async def generate(self, prompt: str, system: str | None = None) -> str:
         logger.info(
             "Ollama generate request: base_url=%s model=%s", self.base_url, self.model
         )

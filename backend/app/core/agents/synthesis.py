@@ -1,9 +1,10 @@
-from typing import Optional, TypedDict
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
 from app.core.prompts import get_prompt
-from langgraph.graph import END, StateGraph
 
 MAX_ITERATIONS = 3
 
@@ -11,11 +12,11 @@ MAX_ITERATIONS = 3
 class SynthesisState(TypedDict):
     objective: str
     task_description: str
-    plan: Optional[dict]
-    research_findings: Optional[list]
-    data_results: Optional[list]
-    report: Optional[str]
-    error: Optional[str]
+    plan: dict | None
+    research_findings: list | None
+    data_results: list | None
+    report: str | None
+    error: str | None
     iteration: int
     trace_id: str
 

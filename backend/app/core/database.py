@@ -1,7 +1,8 @@
-from app.config import get_settings
-from app.core.logging import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
+
+from app.config import get_settings
+from app.core.logging import logger
 
 settings = get_settings()
 

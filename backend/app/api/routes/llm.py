@@ -1,4 +1,3 @@
-import asyncio
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
@@ -23,7 +22,7 @@ async def test_generate(request: GenerateRequest):
     )
     try:
         response = await provider.generate(request.prompt, request.system)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error(
             "LLM generation timed out for provider=%s", type(provider).__name__
         )
@@ -50,7 +49,7 @@ async def list_models():
     logger.info("List models request: provider=%s", type(provider).__name__)
     try:
         models = await provider.list_models()
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error(
             "LLM model listing timed out for provider=%s", type(provider).__name__
         )

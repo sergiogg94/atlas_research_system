@@ -34,7 +34,7 @@ async def create_plan(request: ResearchRequest):
             ),
             timeout=600,  # 10 minutes timeout
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("Research Agent timed out")
         raise HTTPException(status_code=504, detail="Research Agent timed out")
 

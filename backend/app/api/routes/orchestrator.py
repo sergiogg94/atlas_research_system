@@ -34,7 +34,7 @@ async def execute_task(request: ExecuteTaskRequest):
             ),
             timeout=600.0,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("Task %s timed out", task_id)
         raise HTTPException(status_code=504, detail="Task execution timed out")
 

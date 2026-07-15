@@ -13,6 +13,7 @@ dependencies = [
     "httpx>=0.28.1",
     "langchain-core>=1.4.2",
     "langgraph>=1.2.4",
+    "mypy>=2.3.0",
     "numpy>=2.5.0",
     "pandas>=3.0.3",
     "pydantic-settings>=2.14.1",
@@ -36,3 +37,11 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_optional = true
+ignore_missing_imports = true

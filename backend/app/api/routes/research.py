@@ -12,7 +12,10 @@ router = APIRouter()
     "/research",
     response_model=ResearchResponse,
     summary="Apply Research Agent",
-    description="Research an objective using the Research Agent, which performs a series of steps to gather information and insights.",
+    description=(
+        "Research an objective using the Research Agent, "
+        + "which performs a series of steps to gather information and insights."
+    ),
 )
 async def create_plan(request: ResearchRequest):
     logger.info(
@@ -50,6 +53,7 @@ async def create_plan(request: ResearchRequest):
     )
 
     return ResearchResponse(
+        status="success",
         objective=result["objective"],
         findings=result.get("findings", []),
         total_steps=result["current_step"],

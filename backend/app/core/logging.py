@@ -30,7 +30,7 @@ settings = get_settings()
 
 
 class ContextFormatter(colorlog.ColoredFormatter):
-    def formatTime(self, record, datefmt=None):
+    def formatTime(self, record, datefmt=None):  # noqa: N802
         dt = datetime.fromtimestamp(record.created, tz=ZoneInfo(settings.timezone))
         return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
 
@@ -45,7 +45,10 @@ custom_dict = {
     "formatters": {
         "default": {
             "()": ContextFormatter,
-            "format": "%(log_color)s%(levelname)-4s%(reset)s [%(trace_id)s] [%(agent_name)s] (%(asctime)s) (%(module)s %(funcName)s): %(message)s",
+            "format": (
+                "%(log_color)s%(levelname)-4s%(reset)s [%(trace_id)s] [%(agent_name)s] "
+                + "(%(asctime)s) (%(module)s %(funcName)s): %(message)s"
+            ),
             "datefmt": "%Y-%m-%d %H:%M:%S",
         }
     },

@@ -1,11 +1,11 @@
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from app.schemas.base import BaseResponse
 
 
-class StepType(str, Enum):
+class StepType(StrEnum):
     SCOPING = "scoping"
     RESEARCH = "research"
     ANALYSIS = "analysis"

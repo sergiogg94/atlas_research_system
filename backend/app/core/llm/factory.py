@@ -16,9 +16,12 @@ def register_provider(name: str, provider_cls: type[LLMProvider]) -> None:
 
 
 def get_llm_provider() -> LLMProvider:
-    """Returns a the settings-specified LLM provider instance, or a default EchoProvider if not found."""
+    """Returns a the settings-specified LLM provider instance,
+    or a default EchoProvider if not found.
+    """
     settings = get_settings()
     cls = _providers.get(settings.llm_provider)
+    provider: LLMProvider
     if cls is None:
         provider = EchoProvider()
     else:
@@ -26,19 +29,19 @@ def get_llm_provider() -> LLMProvider:
     return wrap_llm_provider(provider)
 
 
-# Para mantener un singleton por provider (opcional pero recomendado)
-def get_cached_provider() -> LLMProvider:
-    """Returns a cached instance of the settings-specified LLM provider."""
-    settings = get_settings()
-    cache_key = f"llm_provider_{settings.llm_provider}"
+# # Para mantener un singleton por provider (opcional pero recomendado)
+# def get_cached_provider() -> LLMProvider:
+#     """Returns a cached instance of the settings-specified LLM provider."""
+#     settings = get_settings()
+#     cache_key = f"llm_provider_{settings.llm_provider}"
 
-    import threading
+#     import threading
 
-    if not hasattr(get_cached_provider, "_cache"):
-        get_cached_provider._cache = {}
-        get_cached_provider._lock = threading.Lock()
+#     if not hasattr(get_cached_provider, "_cache"):
+#         get_cached_provider._cache = {}
+#         get_cached_provider._lock = threading.Lock()
 
-    with get_cached_provider._lock:
-        if cache_key not in get_cached_provider._cache:
-            get_cached_provider._cache[cache_key] = get_llm_provider()
-        return get_cached_provider._cache[cache_key]
+#     with get_cached_provider._lock:
+#         if cache_key not in get_cached_provider._cache:
+#             get_cached_provider._cache[cache_key] = get_llm_provider()
+#         return get_cached_provider._cache[cache_key]

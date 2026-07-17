@@ -22,7 +22,8 @@ Context: {context}
 
 Analyze this task and produce a short plan covering:
 
-1. Analysis type — what kind of analysis (aggregation, visualization, statistical test, data cleaning, etc.)
+1. Analysis type — what kind of analysis (aggregation, visualization,
+statistical test, data cleaning, etc.)
 
 2. Approach — Python, SQL, or both?
     - SQL for filtering, joining, aggregating structured data
@@ -39,7 +40,8 @@ class CodeGenSystemPrompt(PromptTemplate):
     template = """You generate safe Python code and SQL queries for data analysis.
 
 Safety rules (never violate):
-- Allowed Python: pandas, numpy, matplotlib, json, math, statistics, collections, datetime, re, typing, itertools
+- Allowed Python: pandas, numpy, matplotlib, json, math, statistics, collections,
+datetime, re, typing, itertools
 - Never use: os, subprocess, exec, eval, compile, __import__, open
 - Always use print() for output
 - Handle errors with try/except
@@ -47,9 +49,7 @@ Safety rules (never violate):
 
 SQL: use standard syntax (SELECT, WHERE, JOIN, GROUP BY, etc.)"""
     version = "1.0.0"
-    description = (
-        "System prompt for python and SQL code generation for data analysis agent"
-    )
+    description = "System prompt for python and SQL code generation for data analysis agent"
 
 
 class CodeGenUserPrompt(PromptTemplate):
@@ -66,13 +66,12 @@ Previous error (if retrying): {error}
 If retrying, fix the specific error shown.
 Return only the code in a markdown block with the language tag."""
     version = "1.0.0"
-    description = (
-        "User prompt for python and SQL code generation for data analysis agent"
-    )
+    description = "User prompt for python and SQL code generation for data analysis agent"
 
 
 class ClassifyOutputSystemPrompt(PromptTemplate):
-    template = """You are a code classifier. Given a block of generated code, determine whether it contains Python code, SQL query, or both.
+    template = """You are a code classifier. Given a block of generated code,
+determine whether it contains Python code, SQL query, or both.
 
 If both, extract the Python part and the SQL part separately.
 Return ONLY valid JSON with this structure:

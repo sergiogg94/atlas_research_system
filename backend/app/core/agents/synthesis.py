@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
@@ -24,9 +25,7 @@ class SynthesisState(TypedDict):
 async def collect_results(state: SynthesisState) -> SynthesisState:
     """Consolidates inputs from previous agents within a structured context."""
     if state.get("error"):
-        logger.debug(
-            "collect_results skipped due to prior error: %s", state.get("error")
-        )
+        logger.debug("collect_results skipped due to prior error: %s", state.get("error"))
         return state
 
     logger.info("Collecting results from plan, research, and data agents")
@@ -36,9 +35,7 @@ async def collect_results(state: SynthesisState) -> SynthesisState:
 async def generate_synthesis(state: SynthesisState) -> SynthesisState:
     """The LLM generates a final report based on all the findings."""
     iteration = state.get("iteration", 0) + 1
-    logger.info(
-        "Generating synthesis report (attempt %d/%d)", iteration, MAX_ITERATIONS
-    )
+    logger.info("Generating synthesis report (attempt %d/%d)", iteration, MAX_ITERATIONS)
 
     if state.get("error"):
         logger.warning("generate_synthesis skipped due to prior error")
@@ -48,16 +45,16 @@ async def generate_synthesis(state: SynthesisState) -> SynthesisState:
     system_prompt = get_prompt("synthesis_system")
     user_prompt = get_prompt("synthesis_user")
 
-    context = {
-        "objective": state.get("objective"),
-        "task_description": state.get("task_description"),
-        "plan": state.get("plan"),
-        "research_findings": state.get("research_findings"),
-        "data_results": state.get("data_results"),
+    context: dict[str, str] = {
+        "objective": str(state.get("objective") or ""),
+        "task_description": str(state.get("task_description") or ""),
+        "plan": str(state.get("plan") or ""),
+        "research_findings": str(state.get("research_findings") or ""),
+        "data_results": str(state.get("data_results") or ""),
     }
 
     response = await provider.generate(
-        prompt=user_prompt.format(context=context),
+        prompt=user_prompt.format(**context),
         system=system_prompt.template,
     )
 
@@ -103,7 +100,7 @@ def synthesis_complete(state: SynthesisState) -> str:
     return "retry"
 
 
-def build_synthesis_graph() -> StateGraph:
+def build_synthesis_graph() -> CompiledStateGraph:
     logger.info("Building synthesis StateGraph")
     workflow = StateGraph(SynthesisState)
 
@@ -129,4 +126,10 @@ def build_synthesis_graph() -> StateGraph:
         },
     )
 
-    return workflow.compile()
+    try:
+        compiled = workflow.compile()
+        logger.info("Planner StateGraph compiled successfully")
+        return compiled
+    except Exception as e:
+        logger.exception("Failed to compile planner StateGraph: %s", e)
+        raise

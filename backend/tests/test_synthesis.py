@@ -1,13 +1,13 @@
-import pytest
 from unittest.mock import patch
 
+import pytest
 from app.core.agents.synthesis import (
     MAX_ITERATIONS,
+    build_synthesis_graph,
     collect_results,
     generate_synthesis,
-    validate_report,
     synthesis_complete,
-    build_synthesis_graph,
+    validate_report,
 )
 from app.core.llm.base import LLMProvider
 
@@ -104,7 +104,11 @@ class TestGenerateSynthesis:
         captured = {}
 
         class CapturingPrompt:
-            template = "template {context}"
+            template = """template objective: {objective}
+                task_description: {task_description}
+                plan: {plan}
+                research_findings: {research_findings}
+                data_results: {data_results}"""
 
             def format(self, **kwargs):
                 captured.update(kwargs)
@@ -119,12 +123,11 @@ class TestGenerateSynthesis:
         ):
             await generate_synthesis({**BASE_STATE})
 
-        ctx = captured["context"]
-        assert ctx["objective"] == "test objective"
-        assert ctx["task_description"] == "test task"
-        assert ctx["plan"] == BASE_STATE["plan"]
-        assert ctx["research_findings"] == BASE_STATE["research_findings"]
-        assert ctx["data_results"] == BASE_STATE["data_results"]
+        assert captured["objective"] == "test objective"
+        assert captured["task_description"] == "test task"
+        assert captured["plan"] == str(BASE_STATE["plan"])
+        assert captured["research_findings"] == str(BASE_STATE["research_findings"])
+        assert captured["data_results"] == str(BASE_STATE["data_results"])
 
     @pytest.mark.asyncio
     async def test_propagates_llm_exception(self):
@@ -217,12 +220,8 @@ class TestSynthesisGraphIntegration:
     async def test_happy_path(self):
         llm = FakeSynthesisLLM(responses=["Final synthesized report"])
         with (
-            patch(
-                "app.core.agents.synthesis.get_llm_provider", return_value=llm
-            ),
-            patch(
-                "app.core.agents.synthesis.get_prompt", return_value=FakePrompt()
-            ),
+            patch("app.core.agents.synthesis.get_llm_provider", return_value=llm),
+            patch("app.core.agents.synthesis.get_prompt", return_value=FakePrompt()),
         ):
             graph = build_synthesis_graph()
             result = await graph.ainvoke({**BASE_STATE})
@@ -236,12 +235,8 @@ class TestSynthesisGraphIntegration:
     async def test_retry_and_recover(self):
         llm = FakeSynthesisLLM(responses=["", "Report after retry"])
         with (
-            patch(
-                "app.core.agents.synthesis.get_llm_provider", return_value=llm
-            ),
-            patch(
-                "app.core.agents.synthesis.get_prompt", return_value=FakePrompt()
-            ),
+            patch("app.core.agents.synthesis.get_llm_provider", return_value=llm),
+            patch("app.core.agents.synthesis.get_prompt", return_value=FakePrompt()),
         ):
             graph = build_synthesis_graph()
             result = await graph.ainvoke({**BASE_STATE})
@@ -255,12 +250,8 @@ class TestSynthesisGraphIntegration:
     async def test_max_retries_exhausted(self):
         llm = FakeSynthesisLLM(responses=["", "", ""])
         with (
-            patch(
-                "app.core.agents.synthesis.get_llm_provider", return_value=llm
-            ),
-            patch(
-                "app.core.agents.synthesis.get_prompt", return_value=FakePrompt()
-            ),
+            patch("app.core.agents.synthesis.get_llm_provider", return_value=llm),
+            patch("app.core.agents.synthesis.get_prompt", return_value=FakePrompt()),
         ):
             graph = build_synthesis_graph()
             result = await graph.ainvoke({**BASE_STATE})

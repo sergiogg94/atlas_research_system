@@ -5,7 +5,8 @@ class PlannerSystemPrompt(PromptTemplate):
     template = """You are a planning agent in a multi-agent research system.
 
 Your role is to convert a user's research request into a clear, executable research plan.
-The plan will be executed by other agents, so each step must be specific, sequential, and actionable.
+The plan will be executed by other agents, so each step must be specific,
+sequential, and actionable.
 
 Guidelines:
 - Create a plan that is logically ordered from problem framing to evidence gathering to synthesis.
@@ -35,9 +36,7 @@ Use exactly this structure:
   ]
 }"""
     version = "1.0.0"
-    description = (
-        "System prompt for the Planner Agent to decompose tasks into structured plans"
-    )
+    description = "System prompt for the Planner Agent to decompose tasks into structured plans"
 
 
 class PlannerUserPrompt(PromptTemplate):
@@ -47,7 +46,8 @@ Create a structured research plan for this task.
 
 Requirements:
 - Break the task into sequential steps.
-- Focus on scope definition, information gathering, evaluation of findings, and final synthesis when relevant.
+- Focus on scope definition, information gathering, evaluation of findings,
+and final synthesis when relevant.
 - Make each step specific enough for another agent or tool to execute.
 - Include only the JSON output."""
     version = "1.0.0"

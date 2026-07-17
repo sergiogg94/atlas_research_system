@@ -23,7 +23,11 @@ Produce a comprehensive report with:
 class SynthesisUserPrompt(PromptTemplate):
     template = """Synthesize the following research into a structured report.
 
-{context}
+objective: {objective}
+task_description: {task_description}
+plan: {plan}
+research_findings: {research_findings}
+data_results: {data_results}
 
 Return the report in markdown format with clear sections."""
     version = "1.0.0"

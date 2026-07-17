@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
@@ -52,9 +53,7 @@ async def search_web(state: ResearchState) -> ResearchState:
         logger.warning("Web search failed: %s", result.error)
         return {**state, "error": f"Search failed: {result.error}"}
 
-    logger.info(
-        "Web search completed with %s results", len(result.data) if result.data else 0
-    )
+    logger.info("Web search completed with %s results", len(result.data) if result.data else 0)
     return {**state, "search_results": result.data}
 
 
@@ -71,8 +70,9 @@ async def scrape_content(state: ResearchState) -> ResearchState:
     logger.debug("Step %s", state["current_step"])
     tool = get_tool("web_scraper")
     contents = []
+    searc_results = state.get("search_results") or []
 
-    for item in state["search_results"][:3]:
+    for item in searc_results[:3]:
         url = item.get("href") or item.get("link")
         if url:
             logger.info("Scraping URL: %s", url)
@@ -95,21 +95,20 @@ async def scrape_content(state: ResearchState) -> ResearchState:
 async def synthesize_finding(state: ResearchState) -> ResearchState:
     """Synthesizes the findings into a summary for the current step using the LLM."""
     if state.get("error"):
-        logger.debug(
-            "synthesize_finding skipped due to prior error: %s", state.get("error")
-        )
+        logger.debug("synthesize_finding skipped due to prior error: %s", state.get("error"))
         return state
 
     logger.info("Synthesizing findings for step %s", state["current_step"])
     provider = get_llm_provider()
     sys_prompt = get_prompt("research_system")
     user_prompt = get_prompt("research_user")
+    search_results_list = state.get("search_results") or []
 
     search_results_text = (
         "\n".join(
             [
                 f"- {item.get('title', '')} | {item.get('href') or item.get('link', '')}"
-                for item in state.get("search_results", [])[:5]
+                for item in search_results_list[:5]
             ]
         )
         or "No search results available."
@@ -119,7 +118,8 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
     scraped_contents_text = (
         "\n\n".join(
             [
-                f"URL: {content.get('url', '')}\nTitle: {content.get('title', '')}\nContent: {content.get('content', '')[:1000]}"
+                f"URL: {content.get('url', '')}\nTitle: {content.get('title', '')}\n"
+                + f"Content: {content.get('content', '')[:1000]}"
                 for content in scraped_contents
             ]
         )
@@ -128,7 +128,7 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
 
     prompt_text = user_prompt.format(
         objective=state["objective"],
-        current_step=state["current_step"],
+        current_step=str(state["current_step"]),
         current_query=state["current_query"] or "",
         search_results=search_results_text,
         scraped_contents=scraped_contents_text,
@@ -137,9 +137,7 @@ async def synthesize_finding(state: ResearchState) -> ResearchState:
     logger.debug("Research user prompt (truncated): %s", prompt_text[:500])
     summary = await provider.generate(prompt=prompt_text, system=sys_prompt.template)
 
-    logger.info(
-        "LLM generated research summary; length=%s", len(summary) if summary else 0
-    )
+    logger.info("LLM generated research summary; length=%s", len(summary) if summary else 0)
 
     finding = {
         "step": state["current_step"],
@@ -172,7 +170,7 @@ def research_complete(state: ResearchState) -> str:
     return "incomplete"
 
 
-def build_research_graph() -> StateGraph:
+def build_research_graph() -> CompiledStateGraph:
     logger.info("Building research StateGraph")
     workflow = StateGraph(ResearchState)
 

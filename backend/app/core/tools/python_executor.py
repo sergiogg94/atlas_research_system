@@ -1,5 +1,6 @@
 import ast
 import sys
+from typing import Any
 
 from app.core.logging import logger
 from app.core.tools.base import BaseTool, ToolResult
@@ -36,7 +37,10 @@ class PythonExecutorTool(BaseTool):
             "or run statistical analysis."
         )
 
-    async def execute(self, code: str, timeout: int = 30) -> ToolResult:
+    async def execute(self, *args: Any, **kwargs: Any) -> ToolResult:
+        code = kwargs.get("code", args[0] if args else "")
+        timeout = int(kwargs.get("timeout", args[1] if len(args) > 1 else 30))
+
         try:
             logger.info("Executing Python code with timeout %s seconds", timeout)
             self._validate_code(code)
@@ -50,19 +54,17 @@ class PythonExecutorTool(BaseTool):
             )
 
             success = (returncode == 0) and not stderr
-            result_kwargs = {
-                "success": success,
-                "data": {
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "returncode": returncode,
-                    "plots": [],
-                },
+            result_data = {
+                "stdout": stdout,
+                "stderr": stderr,
+                "returncode": returncode,
+                "plots": [],
             }
-            if not success:
-                result_kwargs["error"] = stderr
 
-            return ToolResult(**result_kwargs)
+            if success:
+                return ToolResult(success=True, data=result_data)
+            else:
+                return ToolResult(success=False, data=result_data, error=stderr)
         except Exception as e:
             logger.error("Error executing Python code: %s", str(e))
             return ToolResult(success=False, error=str(e))
@@ -77,16 +79,14 @@ class PythonExecutorTool(BaseTool):
                     if alias.name not in ALLOWED_IMPORTS:
                         logger.error("Disallowed import found: %s", alias.name)
                         raise ValueError(
-                            f"Import '{alias.name}' not allowed. "
-                            f"Allowed: {sorted(ALLOWED_IMPORTS)}"
+                            f"Import '{alias.name}' not allowed. Allowed: {sorted(ALLOWED_IMPORTS)}"
                         )
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if module not in ALLOWED_IMPORTS:
                     logger.error("Disallowed import from module: %s", module)
                     raise ValueError(
-                        f"Import from '{module}' not allowed. "
-                        f"Allowed: {sorted(ALLOWED_IMPORTS)}"
+                        f"Import from '{module}' not allowed. Allowed: {sorted(ALLOWED_IMPORTS)}"
                     )
             elif isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Attribute):
@@ -129,9 +129,7 @@ class PythonExecutorTool(BaseTool):
 
                 def _limit_resources():
                     # Limit memory to 256MB
-                    resource.setrlimit(
-                        resource.RLIMIT_AS, (256 * 1024 * 1024, 256 * 1024 * 1024)
-                    )
+                    resource.setrlimit(resource.RLIMIT_AS, (256 * 1024 * 1024, 256 * 1024 * 1024))
                     # Limit CPU time to timeout value
                     resource.setrlimit(resource.RLIMIT_CPU, (timeout, timeout))
                     # Prevent core dumps
@@ -148,9 +146,7 @@ class PythonExecutorTool(BaseTool):
                 preexec_fn=preexec_fn,  # Only works on Unix/Linux
             )
             if proc.returncode != 0:
-                stderr = (
-                    proc.stderr or f"Process exited with return code {proc.returncode}"
-                )
+                stderr = proc.stderr or f"Process exited with return code {proc.returncode}"
             else:
                 stderr = proc.stderr
 
@@ -168,8 +164,8 @@ class PythonExecutorTool(BaseTool):
             )
         except subprocess.CalledProcessError as e:
             logger.error("Process exited with error: %s", e.stderr)
-            code = e.returncode if hasattr(e, "returncode") else -3
-            return "", f"Process error: {e.stderr}", code
+            return_code = e.returncode if hasattr(e, "returncode") else -3
+            return "", f"Process error: {e.stderr}", return_code
         except Exception as e:
             logger.error("Error executing code: %s", str(e))
             return "", str(e), -2
@@ -196,9 +192,7 @@ class PythonExecutorTool(BaseTool):
             if char.isprintable() or char in ("\n", "\t", "\r"):
                 sanitized += char
             else:
-                logger.debug(
-                    "Removed dangerous character: %s (ord: %d)", repr(char), ord(char)
-                )
+                logger.debug("Removed dangerous character: %s (ord: %d)", repr(char), ord(char))
 
         return sanitized
 

@@ -1,15 +1,17 @@
 import uuid
-from enum import Enum
+from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.core.datetime_utils import now
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -20,20 +22,27 @@ class ExecutionStatus(str, Enum):
 class Execution(Base):
     __tablename__ = "executions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    trace_id = Column(String(36), unique=True, nullable=False, index=True)
-    task_description = Column(Text, nullable=False)
-    objective = Column(Text, nullable=True)
-    status = Column(
-        SQLEnum(ExecutionStatus), default=ExecutionStatus.PENDING, index=True
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
-    total_steps = Column(Integer, default=0)
-    error = Column(Text, nullable=True)
-    report = Column(Text, nullable=True)
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=now)
-    updated_at = Column(DateTime(timezone=True), default=now, onupdate=now)
+    trace_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    task_description: Mapped[str] = mapped_column(Text, nullable=False)
+    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[ExecutionStatus] = mapped_column(
+        SQLEnum(ExecutionStatus),
+        default=ExecutionStatus.PENDING,
+        index=True,
+        nullable=False,
+    )
+    total_steps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    report: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ExecutionStep(Base):

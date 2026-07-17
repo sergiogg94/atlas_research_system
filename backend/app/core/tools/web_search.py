@@ -1,3 +1,5 @@
+from typing import Any
+
 from ddgs import DDGS
 
 from app.core.logging import logger
@@ -11,9 +13,17 @@ class WebSearchTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Search the web for current information. Use this to find recent data, news, or facts"
+        return (
+            "Search the web for current information. Use this to find recent data, news, or facts"
+        )
 
-    async def execute(self, query: str, max_results: int = 5) -> ToolResult:
+    async def execute(self, *args: Any, **kwargs: Any) -> ToolResult:
+        query = kwargs.get("query", args[0] if args else "")
+        max_results = int(kwargs.get("max_results", args[1] if len(args) > 1 else 5))
+
+        if not isinstance(query, str) or not query.strip():
+            return ToolResult(success=False, error="query is required")
+
         try:
             with DDGS() as ddgs:
                 logger.info(

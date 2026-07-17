@@ -20,9 +20,7 @@ class OllamaProvider(LLMProvider):
 
     @retry(**retry_config)
     async def generate(self, prompt: str, system: str | None = None) -> str:
-        logger.info(
-            "Ollama generate request: base_url=%s model=%s", self.base_url, self.model
-        )
+        logger.info("Ollama generate request: base_url=%s model=%s", self.base_url, self.model)
         logger.debug("Ollama prompt length: %s", len(prompt) if prompt else 0)
         async with httpx.AsyncClient(timeout=60.0) as client:
             payload = {

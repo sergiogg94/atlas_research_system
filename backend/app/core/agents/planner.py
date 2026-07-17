@@ -2,6 +2,7 @@ import json
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
 from app.core.llm.factory import get_llm_provider
@@ -53,9 +54,7 @@ async def generate_plan(state: PlannerState) -> PlannerState:
         system=sys_prompt.template,
     )
 
-    logger.info(
-        "LLM generation completed; response_length=%s", len(response) if response else 0
-    )
+    logger.info("LLM generation completed; response_length=%s", len(response) if response else 0)
     logger.debug("LLM response preview: %s", (response or "")[:500])
 
     return {**state, "llm_response": response}
@@ -72,7 +71,7 @@ def parse_plan(state: PlannerState) -> PlannerState:
             "Parsing LLM response (truncated): %s",
             (state.get("llm_response") or "")[:500],
         )
-        data = json.loads(state["llm_response"])
+        data = json.loads(state.get("llm_response") or "{}")
         plan = Plan(**data)
         # include a lightweight info about parsed plan when possible
         plan_summary = None
@@ -108,7 +107,7 @@ def plan_complete(state: PlannerState) -> str:
     return "continue"
 
 
-def build_planner_graph() -> StateGraph:
+def build_planner_graph() -> CompiledStateGraph:
     logger.info("Building planner StateGraph")
     workflow = StateGraph(PlannerState)
 

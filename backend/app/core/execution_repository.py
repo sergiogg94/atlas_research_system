@@ -107,9 +107,7 @@ class ExecutionRepository:
 
     async def get_execution_by_trace_id(self, trace_id: str) -> Execution | None:
         async with SessionLocal() as session:
-            result = await session.execute(
-                select(Execution).where(Execution.trace_id == trace_id)
-            )
+            result = await session.execute(select(Execution).where(Execution.trace_id == trace_id))
             return result.scalar_one_or_none()
 
     async def get_execution_by_id(self, execution_id: uuid.UUID) -> Execution | None:
@@ -128,7 +126,7 @@ class ExecutionRepository:
             count_query = select(func.count()).select_from(Execution)
             if status:
                 count_query = count_query.where(Execution.status == status)
-            total = (await session.execute(count_query)).scalar()
+            total = int((await session.execute(count_query)).scalar() or 0)
 
             query = query.offset((page - 1) * page_size).limit(page_size)
             result = await session.execute(query)
@@ -161,14 +159,10 @@ class ExecutionRepository:
             )
             return list(result.scalars().all())
 
-    async def get_metrics(
-        self, trace_id: str
-    ) -> ExecutionMetricsCache | None:
+    async def get_metrics(self, trace_id: str) -> ExecutionMetricsCache | None:
         async with SessionLocal() as session:
             result = await session.execute(
-                select(ExecutionMetricsCache).where(
-                    ExecutionMetricsCache.trace_id == trace_id
-                )
+                select(ExecutionMetricsCache).where(ExecutionMetricsCache.trace_id == trace_id)
             )
             return result.scalar_one_or_none()
 

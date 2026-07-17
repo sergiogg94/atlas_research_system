@@ -1,4 +1,5 @@
 import logging
+from typing import Any, cast
 
 import httpx
 from tenacity import (
@@ -7,6 +8,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+from tenacity._utils import LoggerProtocol
 
 from app.core.logging import logger
 
@@ -40,12 +42,10 @@ def _after(retry_state):
             exc,
         )
     else:
-        logger.info(
-            "Retry attempt %s for %s completed", retry_state.attempt_number, fname
-        )
+        logger.info("Retry attempt %s for %s completed", retry_state.attempt_number, fname)
 
 
-retry_config = {
+retry_config: dict[str, Any] = {
     "stop": stop_after_attempt(3),
     "wait": wait_exponential(multiplier=1, min=2, max=10),
     "retry": retry_if_exception_type(
@@ -57,5 +57,5 @@ retry_config = {
     "reraise": True,
     "before": _before,
     "after": _after,
-    "before_sleep": before_sleep_log(logger, logging.WARNING),
+    "before_sleep": before_sleep_log(cast(LoggerProtocol, logger), logging.WARNING),
 }

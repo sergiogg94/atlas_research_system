@@ -5,9 +5,9 @@ import pytest
 from app.core.tools import get_tool, list_tools, register_tool
 from app.core.tools.base import BaseTool, ToolResult
 from app.core.tools.python_executor import PythonExecutorTool
+from app.core.tools.sql_query import SQLQueryTool
 from app.core.tools.web_scraper import WebScraperTool
 from app.core.tools.web_search import WebSearchTool
-from app.core.tools.sql_query import SQLQueryTool
 
 
 class TestWebSearchTool:
@@ -137,9 +137,7 @@ class TestWebScraperTool:
 
     @pytest.mark.asyncio
     async def test_scrape_timeout(self, tool):
-        with patch(
-            "httpx.AsyncClient.get", side_effect=httpx.TimeoutException("Timeout")
-        ):
+        with patch("httpx.AsyncClient.get", side_effect=httpx.TimeoutException("Timeout")):
             result = await tool.execute(url="https://example.com")
 
         assert result.success is False
@@ -301,7 +299,7 @@ class TestSQLQueryTool:
     @pytest.mark.asyncio
     async def test_select_from_pg_catalog(self, executor):
         result = await executor.execute("SELECT 1 as test")
-        assert result.success == True
+        assert result.success
         assert result.data["columns"] == ["test"]
 
     # @pytest.mark.asyncio

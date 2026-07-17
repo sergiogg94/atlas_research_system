@@ -1,3 +1,5 @@
+from typing import Any
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -12,17 +14,21 @@ class WebScraperTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Scrape and extract text content from a URL. Use this to read articles, documentation, or any web page"
+        return (
+            "Scrape and extract text content from a URL. "
+            + "Use this to read articles, documentation, or any web page"
+        )
 
-    async def execute(self, url: str, max_chars: int = 5000) -> ToolResult:
+    async def execute(self, *args: Any, **kwargs: Any) -> ToolResult:
+        url = kwargs.get("url", args[0] if args else "")
+        max_chars = int(kwargs.get("max_chars", args[1] if len(args) > 1 else 5000))
+
         try:
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
                 logger.info("Scraping URL: %s", url)
                 response = await client.get(
                     url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (compatible; AtlasResearchBot/1.0)"
-                    },
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; AtlasResearchBot/1.0)"},
                 )
                 response.raise_for_status()
                 logger.info(
@@ -56,9 +62,7 @@ class WebScraperTool(BaseTool):
             return ToolResult(success=False, error=f"Timeout scraping {url}")
         except httpx.HTTPStatusError as e:
             logger.error("HTTP error %s while scraping %s", e.response.status_code, url)
-            return ToolResult(
-                success=False, error=f"HTTP {e.response.status_code} for {url}"
-            )
+            return ToolResult(success=False, error=f"HTTP {e.response.status_code} for {url}")
         except Exception as e:
             logger.error("Error scraping %s: %s", url, str(e))
             return ToolResult(success=False, error=str(e))

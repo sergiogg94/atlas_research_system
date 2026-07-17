@@ -1,3 +1,4 @@
+from app.core.prompts.base import PromptTemplate
 from app.core.prompts.data import (
     AnalysisSystemPrompt,
     AnalysisUserPrompt,
@@ -26,7 +27,7 @@ _PROMPTS: dict[str, type] = {
 }
 
 
-def get_prompt(name: str) -> object:
+def get_prompt(name: str) -> PromptTemplate:
     cls = _PROMPTS.get(name)
     if cls is None:
         raise KeyError(f"Prompt '{name}' not found. Available: {list(_PROMPTS.keys())}")

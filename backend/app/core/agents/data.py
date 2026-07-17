@@ -2,6 +2,7 @@ import json
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
@@ -50,8 +51,8 @@ async def generate_code(state: DataState) -> DataState:
     response = await provider.generate(
         prompt=user_prompt.format(
             task=state["task"],
-            analysis=state.get("analysis", ""),
-            error=state.get("error", "None"),
+            analysis=state.get("analysis") or "",
+            error=state.get("error") or "None",
         ),
         system=system_prompt.template,
     )
@@ -71,7 +72,7 @@ async def classify_output(state: DataState) -> DataState:
     user_prompt = get_prompt("data_classify_output_user")
 
     response = await provider.generate(
-        prompt=user_prompt.format(code=state["code"]),
+        prompt=user_prompt.format(code=state["code"] or ""),
         system=system_prompt.template,
     )
 
@@ -164,7 +165,7 @@ def has_sql_error(state: DataState) -> str:
     return "success"
 
 
-def build_data_graph() -> StateGraph:
+def build_data_graph() -> CompiledStateGraph:
     logger.info("Building data StateGraph")
     workflow = StateGraph(DataState)
 

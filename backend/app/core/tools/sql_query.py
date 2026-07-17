@@ -1,4 +1,5 @@
 import re
+from typing import Any
 
 from sqlalchemy import text
 
@@ -20,7 +21,11 @@ class SQLQueryTool(BaseTool):
             "information from the database. Only SELECT queries are allowed."
         )
 
-    async def execute(self, query: str, params: dict | None = None) -> ToolResult:
+    # async def execute(self, query: str, params: dict | None = None) -> ToolResult:
+    async def execute(self, *args: Any, **kwargs: Any) -> ToolResult:
+        query = kwargs.get("query", args[0] if args else "")
+        params = kwargs.get("params", args[1] if len(args) > 1 else None)
+
         try:
             logger.info("SQLQueryTool execution begins")
             self._validate_query(query)

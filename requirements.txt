@@ -8,6 +8,8 @@ anyio==4.13.0
     # via
     #   httpx
     #   starlette
+ast-serialize==0.6.0
+    # via mypy
 asyncpg==0.31.0
     # via atlas-research-system (pyproject.toml)
 beautifulsoup4==4.15.0
@@ -19,6 +21,8 @@ certifi==2026.5.20
     #   httpcore
     #   httpx
     #   requests
+cfgv==3.5.0
+    # via pre-commit
 charset-normalizer==3.4.7
     # via requests
 click==8.4.1
@@ -27,12 +31,20 @@ click==8.4.1
     #   uvicorn
 colorlog==6.10.1
     # via atlas-research-system (pyproject.toml)
+coverage==7.15.2
+    # via pytest-cov
 ddgs==9.14.4
     # via atlas-research-system (pyproject.toml)
+distlib==0.4.3
+    # via virtualenv
 fake-useragent==2.2.0
     # via ddgs
 fastapi==0.136.3
     # via atlas-research-system (pyproject.toml)
+filelock==3.30.2
+    # via
+    #   python-discovery
+    #   virtualenv
 greenlet==3.5.1
     # via sqlalchemy
 h11==0.16.0
@@ -53,6 +65,8 @@ httpx==0.28.1
     #   langsmith
 hyperframe==6.1.0
     # via h2
+identify==2.6.19
+    # via pre-commit
 idna==3.18
     # via
     #   anyio
@@ -87,8 +101,16 @@ langgraph-sdk==0.4.2
     # via langgraph
 langsmith==0.8.11
     # via langchain-core
+librt==0.13.0
+    # via mypy
 lxml==6.1.1
     # via ddgs
+mypy==2.3.0
+    # via atlas-research-system (pyproject.toml)
+mypy-extensions==1.1.0
+    # via mypy
+nodeenv==1.10.0
+    # via pre-commit
 numpy==2.5.0
     # via
     #   atlas-research-system (pyproject.toml)
@@ -106,8 +128,18 @@ packaging==26.2
     #   pytest
 pandas==3.0.3
     # via atlas-research-system (pyproject.toml)
+pathspec==1.1.1
+    # via mypy
+platformdirs==4.10.0
+    # via
+    #   python-discovery
+    #   virtualenv
 pluggy==1.6.0
-    # via pytest
+    # via
+    #   pytest
+    #   pytest-cov
+pre-commit==4.6.0
+    # via atlas-research-system (pyproject.toml)
 primp==1.3.1
     # via ddgs
 pydantic==2.13.4
@@ -127,14 +159,21 @@ pytest==9.1.0
     # via
     #   atlas-research-system (pyproject.toml)
     #   pytest-asyncio
+    #   pytest-cov
 pytest-asyncio==1.4.0
+    # via atlas-research-system (pyproject.toml)
+pytest-cov==7.1.0
     # via atlas-research-system (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via pandas
+python-discovery==1.4.4
+    # via virtualenv
 python-dotenv==1.2.2
     # via pydantic-settings
 pyyaml==6.0.3
-    # via langchain-core
+    # via
+    #   langchain-core
+    #   pre-commit
 redis==8.0.0
     # via atlas-research-system (pyproject.toml)
 requests==2.34.2
@@ -143,6 +182,8 @@ requests==2.34.2
     #   requests-toolbelt
 requests-toolbelt==1.0.0
     # via langsmith
+ruff==0.15.22
+    # via atlas-research-system (pyproject.toml)
 six==1.17.0
     # via python-dateutil
 socksio==1.0.0
@@ -163,6 +204,7 @@ typing-extensions==4.15.0
     #   fastapi
     #   langchain-core
     #   langchain-protocol
+    #   mypy
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
@@ -180,6 +222,8 @@ uuid-utils==0.16.0
     #   langsmith
 uvicorn==0.48.0
     # via atlas-research-system (pyproject.toml)
+virtualenv==21.6.1
+    # via pre-commit
 websockets==15.0.1
     # via
     #   langgraph-sdk

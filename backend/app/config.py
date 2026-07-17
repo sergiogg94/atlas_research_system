@@ -1,7 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,17 +8,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(Path(__file__).parent.parent.parent / ".env"))
 
     # Database settings
-    database_url: str = Field(validation_alias=AliasChoices("DATABASE_URL", "database_url"))
-    postgres_user: str = Field(validation_alias=AliasChoices("POSTGRES_USER", "postgres_user"))
-    postgres_password: str = Field(
-        validation_alias=AliasChoices("POSTGRES_PASSWORD", "postgres_password")
-    )
-    postgres_host: str = Field(validation_alias=AliasChoices("POSTGRES_HOST", "postgres_host"))
-    postgres_port: int = Field(validation_alias=AliasChoices("POSTGRES_PORT", "postgres_port"))
-    postgres_db: str = Field(validation_alias=AliasChoices("POSTGRES_DB", "postgres_db"))
+    database_url: str = ""
+    postgres_user: str = ""
+    postgres_password: str = ""
+    postgres_host: str = ""
+    postgres_port: int = 5432
+    postgres_db: str = ""
 
     # Redis settings
-    redis_url: str = Field(validation_alias=AliasChoices("REDIS_URL", "redis_url"))
+    redis_url: str = ""
 
     # API settings
     api_port: int = 8000

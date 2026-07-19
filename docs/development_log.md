@@ -212,3 +212,47 @@ Implemented a complete observability layer with end-to-end trace_id propagation,
 3. **Fire-and-forget DB writes are risky but practical** — `asyncio.ensure_future` for LLM call recording means DB failures are silently swallowed. In production, a background queue (Redis/Celery) would be better, but for a prototype this avoids adding latency to LLM calls.
 4. **UUID handling across layers** — TypedDict state stores execution_id as `Optional[str]`, but the repository expects `UUID`. Consistent conversion at the boundary (with try/except fallback) prevents serialization errors.
 5. **Code classification is surprisingly effective** — The LLM reliably splits Python+SQL outputs when prompted with JSON schema instructions. The `classify_output` node eliminated the previous ambiguity where the Data Agent would try to execute a mixed output as pure Python and fail.
+
+---
+
+## Week 7: Test Coverage, Code Quality Tooling & CI/CD
+
+### Summary
+This week was dedicated to hardening the codebase: comprehensive test expansion across all components (observability, tracing, synthesis, orchestrator, state manager, API error paths), introduction of code quality tooling (ruff, mypy, pre-commit hooks), a CI/CD pipeline via GitHub Actions, timezone-aware timestamp infrastructure, and several refactors driven by type checking and linting.
+
+### Key Deliverables
+- **Timezone-aware timestamps** — `backend/app/core/datetime_utils.py` with `now()` helper using configurable `TIMEZONE` env var; applied across execution repository, models, schemas base, and logging (`ContextFormatter.formatTime` with `ZoneInfo`)
+- **Test expansion (~2,500+ lines of new tests):**
+  - `test_observability.py` (453 lines) — `trace_context`, `trace_step` decorator, `TraceIDMiddleware`, `ExecutionRepository` CRUD, `_TracedLLMProvider`, `_TracedTool`
+  - `test_tracing.py` (303 lines) — low-level `_try_record_llm_call` and `_try_record_tool_call` with UUID conversion edge cases, error handling, token estimation
+  - `test_synthesis.py` (281 lines) — Synthesis Agent graph nodes (`collect_results`, `generate_synthesis`, `validate_report`), retry loop, max iterations
+  - `test_orchestrator.py` (~650+ lines across commits) — orchestrator edges/helpers, error paths, re-planning, degradation detection
+  - `test_state_manager.py` (83 lines) — Redis state CRUD with TTL
+  - `test_api.py` (~195 lines added) — error handling and edge cases in endpoints, observability integration
+  - `test_data_agent.py` — adjusted tests for recent agent changes (classify_output node)
+  - `test_tools.py` — minor adjustments for compatibility
+  - `pytest-cov` configured for coverage reporting (`pytest.ini`, `pyproject.toml`)
+- **Code quality tooling:**
+  - **Ruff** — `pyproject.toml` config (line-length 100, select `E/F/I/N/W/UP`), auto-fixes applied across 37 files
+  - **mypy** — `pyproject.toml` config (`strict_optional`, `warn_unused_ignores`), type fixes across 21 files (~200 annotations improved: `X \| None` syntax, explicit return types, proper Optional handling)
+  - **Pre-commit hooks** — `.pre-commit-config.yaml` with ruff (lint + format), mypy, trailing-whitespace, end-of-file-fixer, check-yaml/json, check-added-large-files
+- **CI/CD pipeline** — `.github/workflows/ci.yml` with service containers (PostgreSQL 15, Redis 7), uv setup, ruff linting, `pytest --cov` with XML report, Codecov upload
+- **Execution metrics from cache table** — `get_metrics()` in `ExecutionRepository` fetches from `ExecutionMetricsCache`; `GET /tasks/{trace_id}/metrics` endpoint returns cached metrics
+- **Bug fixes & refactors** — Default env var values (`TIMEZONE`, `OLLAMA_BASE_URL`, etc.), mypy-driven type safety fixes, ruff formatting on remaining files, updated `requirements.txt`
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| Pre-commit hooks over CI-only linting | Catches formatting/type issues before commit, reducing CI feedback loops; ruff + mypy run in <2s locally |
+| uv in CI | Consistent with local dev toolchain; `uv sync` is measurably faster than pip for dependency resolution |
+| Service containers (Postgres + Redis) in CI | Tests exercise real DB and Redis connections rather than mocks-only, catching integration issues early |
+| pytest-cov + Codecov | Coverage visibility helps identify untested paths; XML report uploads seamlessly to Codecov |
+| TIMEZONE env var | Makes timestamps configurable per environment without code changes; falls back to America/Mexico_City |
+| Centralized `datetime_utils.now()` | Single source of truth for current time, preventing timezone bugs across models, logs, and repository code |
+
+### Key Learnings
+1. **Type checking uncovers real bugs** — mypy's `strict_optional` and `warn_unused_ignores` caught potential `None` dereferences in tools (web_search, python_executor, sql_query), missing return annotations, and inconsistent `Optional` vs `None` handling across the codebase.
+2. **Test observability components independently** — Testing `_try_record_llm_call` and `_try_record_tool_call` in isolation (test_tracing.py) before the higher-level traced wrappers made debugging UUID conversion and async fire-and-forget behavior straightforward.
+3. **Pre-commit hook ordering matters** — Ruff lint + format must run before mypy because mypy checks the formatted code. Running mypy first produces false positives from unformatted line lengths or style violations that ruff would fix.
+4. **Coverage without quality thresholds is vanity** — High line coverage doesn't guarantee correctness. The most valuable tests were the edge-case ones (invalid UUIDs, DB failures, malformed LLM responses), not the happy-path mocks.
+5. **CI service containers are cheap but powerful** — GitHub Actions provides Postgres and Redis containers at no extra cost. The ~30s startup overhead is negligible compared to the confidence gained from running tests against real database and cache instances.

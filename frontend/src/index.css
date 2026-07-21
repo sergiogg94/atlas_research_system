@@ -1,111 +1,75 @@
+/* Variables CSS globales para la aplicación */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --text: #9ca3af; /* color de texto principal en modo oscuro */
+  --text-h: #f3f4f6; /* color de encabezados en modo oscuro */
+  --bg: #16171d; /* fondo principal en modo oscuro */
+  --border: #2e303a; /* color de borde en modo oscuro */
+  --accent: #60a5fa; /* color de acento en modo oscuro */
+  --accent-bg: rgba(96, 165, 250, 0.15); /* fondo de acento oscuro */
+  --accent-border: rgba(96, 165, 250, 0.5); /* borde de acento oscuro */
+  --shadow: /* sombra más intensa para modo oscuro */
+    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif; /* tipografía sans-serif */
+  --heading: system-ui, 'Segoe UI', Roboto, sans-serif; /* tipografía para encabezados */
+  --mono: ui-monospace, Consolas, monospace; /* tipografía monoespaciada */
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font: 18px/145% var(--sans); /* tamaño base, altura de línea y familia de fuente */
+  letter-spacing: 0.18px; /* espacio entre letras ligero */
+  color-scheme: light dark; /* permite que el navegador sepa sobre ambos esquemas */
+  color: var(--text); /* color de texto por defecto */
+  background: var(--bg); /* color de fondo por defecto */
+  font-synthesis: none; /* deshabilita la síntesis de fuentes para mejorar legibilidad */
+  text-rendering: optimizeLegibility; /* optimiza el renderizado del texto */
+  -webkit-font-smoothing: antialiased; /* suaviza las fuentes en navegadores WebKit */
+  -moz-osx-font-smoothing: grayscale; /* suaviza las fuentes en macOS Firefox */
 
   @media (max-width: 1024px) {
-    font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+    font-size: 16px; /* reduce el tamaño base en pantallas medianas o menores */
   }
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  max-width: 100%; /* no excede el ancho de la ventana */
+  margin: 0 auto; /* centra horizontalmente */
+  border-inline: 1px solid var(--border); /* bordes izquierdo y derecho */
+  min-height: 100svh; /* altura mínima igual a la altura de la ventana */
+  display: flex; /* usa un contenedor flex para su contenido */
+  flex-direction: column; /* organiza los hijos en columna */
+  box-sizing: border-box; /* incluye padding y borde en el ancho/alto */
 }
 
 body {
-  margin: 0;
+  margin: 0; /* elimina el margen predeterminado del body */
 }
 
 h1,
 h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+  font-family: var(--heading); /* usa la fuente de encabezado */
+  font-weight: 500; /* peso medio para los títulos */
+  color: var(--text-h); /* color de texto específico para encabezados */
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
+  font-size: 56px; /* tamaño grande para el título principal */
+  letter-spacing: -1.68px; /* reduce el espaciado entre letras */
+  margin: 32px 0; /* margen superior e inferior */
   @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+    font-size: 36px; /* tamaño menor en pantallas medianas */
+    margin: 20px 0; /* margen reducido en pantallas más pequeñas */
   }
 }
+
 h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
+  font-size: 24px; /* tamaño para subtítulos */
+  line-height: 118%; /* altura de línea para buena lectura */
+  letter-spacing: -0.24px; /* ligero ajuste de espaciado */
+  margin: 0 0 8px; /* margen inferior para separar del contenido siguiente */
   @media (max-width: 1024px) {
-    font-size: 20px;
+    font-size: 20px; /* subtítulo más pequeño en pantallas medianas */
   }
 }
+
 p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  margin: 0; /* elimina el margen predeterminado de los párrafos */
 }

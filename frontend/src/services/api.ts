@@ -28,12 +28,12 @@ export const api = {
   /** Get execution details by trace_id */
   async getTaskDetail(traceId: string) {
     const response = await fetch(`${API_BASE}/tasks/${traceId}`);
-    return handleResponse(await response.json());
+    return handleResponse(response);
   },
 
   /** Obtain metrics from an execution */
   async getTaskMetrics(traceId: string) {
     const response = await fetch(`${API_BASE}/tasks/${traceId}/metrics`);
-    return handleResponse(await response.json());
+    return handleResponse(response);
   },
 };

@@ -1,7 +1,8 @@
-from typing import TypedDict
+from typing import Any, TypedDict
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.core.agents.data import build_data_graph
 from app.core.agents.planner import build_planner_graph
@@ -62,7 +63,7 @@ async def save_checkpoint(state: OrchestratorState) -> OrchestratorState:
     return {**state, "checkpoint_idx": checkpoint_idx}
 
 
-def _sanitize_for_json(obj: dict) -> dict:
+def _sanitize_for_json(obj: dict[str, Any]) -> dict[str, Any]:
     """Recursively converts non-JSON-serializable objects to strings/dicts"""
     import json
 
@@ -74,22 +75,18 @@ def _sanitize_for_json(obj: dict) -> dict:
         pass
 
     # Limpiar recursivamente
-    cleaned = {}
+    cleaned: dict[str, Any] = {}
     for key, value in obj.items():
-        if value is None or isinstance(value, (str, int, float, bool)):
+        if value is None or isinstance(value, str | int | float | bool):
             cleaned[key] = value
         elif isinstance(value, dict):
             cleaned[key] = _sanitize_for_json(value)
-        elif isinstance(value, (list, tuple)):
+        elif isinstance(value, list | tuple):
             cleaned[key] = [
                 (
                     _sanitize_for_json(item)
                     if isinstance(item, dict)
-                    else (
-                        str(item)
-                        if not isinstance(item, (str, int, float, bool))
-                        else item
-                    )
+                    else (str(item) if not isinstance(item, str | int | float | bool) else item)
                 )
                 for item in value
             ]
@@ -106,16 +103,14 @@ def with_checkpoint(node_func):
     async def wrapped(state):
         result = await node_func(state)
         if result.get("checkpoint_idx"):
-            await state_manager.save_orchestrator_state(
-                result["checkpoint_idx"], dict(result)
-            )
+            await state_manager.save_orchestrator_state(result["checkpoint_idx"], dict(result))
         return result
 
     return wrapped
 
 
 async def _record_execution_step(
-    state: OrchestratorState,
+    state: OrchestratorState | dict[str, Any],
     agent_name: str,
     step_type: str,
     input_summary: str | None = None,
@@ -130,13 +125,9 @@ async def _record_execution_step(
         return None
 
     try:
-        execution_uuid = (
-            execution_id if isinstance(execution_id, UUID) else UUID(str(execution_id))
-        )
+        execution_uuid = execution_id if isinstance(execution_id, UUID) else UUID(str(execution_id))
     except ValueError:
-        logger.warning(
-            "Invalid execution_id received for step recording: %s", execution_id
-        )
+        logger.warning("Invalid execution_id received for step recording: %s", execution_id)
         return None
 
     try:
@@ -202,6 +193,7 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(exc),
             )
+            await execution_repository.compute_and_upsert_metrics(execution.id)
             await _record_execution_step(
                 execution_state,
                 agent_name="planner",
@@ -219,6 +211,7 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(result["error"]),
             )
+            await execution_repository.compute_and_upsert_metrics(execution.id)
             await _record_execution_step(
                 execution_state,
                 agent_name="planner",
@@ -273,7 +266,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
     with trace_context(state.get("trace_id", ""), "research"):
         logger.info("Orchestrator: running research agent")
 
-        execution_id_var.set(state.get("execution_id", ""))
+        execution_id_var.set(state.get("execution_id") or "")
 
         step = await _record_execution_step(
             state,
@@ -301,6 +294,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(exc),
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="research",
@@ -322,6 +316,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(result["error"]),
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="research",
@@ -339,7 +334,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
 
         await execution_repository.update_execution(
             execution_id=UUID(state["execution_id"]),
-            total_steps=state.get("total_steps", 0) + len(state.get("plan_steps", [])),
+            total_steps=state.get("total_steps", 0) + len(state.get("plan_steps") or []),
         )
         await _record_execution_step(
             state,
@@ -355,8 +350,7 @@ async def run_research(state: OrchestratorState) -> OrchestratorState:
             **state,
             "research_findings": result.get("findings", []),
             "current_agent": "research",
-            "total_steps": state.get("total_steps", 0)
-            + len(state.get("plan_steps", [])),
+            "total_steps": state.get("total_steps", 0) + len(state.get("plan_steps") or []),
         }
 
 
@@ -375,7 +369,7 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
 
         logger.info("Orchestrator: running data agent")
 
-        execution_id_var.set(state.get("execution_id", ""))
+        execution_id_var.set(state.get("execution_id") or "")
 
         step = await _record_execution_step(
             state,
@@ -402,6 +396,7 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(exc),
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="data",
@@ -423,6 +418,7 @@ async def run_data(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(result["error"]),
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="data",
@@ -486,7 +482,7 @@ def _build_data_context(state: OrchestratorState) -> str:
     parts = [f"# Objective\n{state.get('objective', '')}\n"]
 
     if state.get("plan"):
-        plan = state["plan"]
+        plan = state["plan"] or dict()
         parts.append(f"# Plan\n{plan.get('objective', '')}\n")
 
     findings = state.get("research_findings") or []
@@ -515,7 +511,7 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
     with trace_context(state.get("trace_id", ""), "synthesis"):
         logger.info("Orchestrator: running synthesis agent")
 
-        execution_id_var.set(state.get("execution_id", ""))
+        execution_id_var.set(state.get("execution_id") or "")
 
         step = await _record_execution_step(
             state,
@@ -544,6 +540,7 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(exc),
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="synthesis",
@@ -565,6 +562,7 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=str(result["error"]),
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="synthesis",
@@ -586,6 +584,7 @@ async def run_synthesis(state: OrchestratorState) -> OrchestratorState:
             total_steps=state.get("total_steps", 0) + 1,
             report=result.get("report"),
         )
+        await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
         await _record_execution_step(
             state,
             agent_name="synthesis",
@@ -763,6 +762,7 @@ async def check_degradation(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.FAILED,
                 error=error_msg,
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="orchestrator",
@@ -789,6 +789,7 @@ async def check_max_steps(state: OrchestratorState) -> OrchestratorState:
                 status=ExecutionStatus.TIMEOUT,
                 error=error_msg,
             )
+            await execution_repository.compute_and_upsert_metrics(UUID(state["execution_id"]))
             await _record_execution_step(
                 state,
                 agent_name="orchestrator",
@@ -807,7 +808,7 @@ async def check_max_steps(state: OrchestratorState) -> OrchestratorState:
 def route_after_check(state: OrchestratorState) -> str:
     """Route after the max-steps check to the appropriate next node."""
     if state.get("error"):
-        if "limit reached" in state.get("error", ""):
+        if "limit reached" in (state.get("error") or ""):
             return "end"
         return "re_plan"
 
@@ -821,7 +822,7 @@ def route_after_check(state: OrchestratorState) -> str:
     return "end"
 
 
-def build_orchestrator_graph() -> StateGraph:
+def build_orchestrator_graph() -> CompiledStateGraph:
     logger.info("Building orchestrator graph")
     workflow = StateGraph(OrchestratorState)
 

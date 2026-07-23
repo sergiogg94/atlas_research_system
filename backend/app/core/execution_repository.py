@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.core.database import SessionLocal
 from app.core.datetime_utils import now
@@ -158,6 +159,89 @@ class ExecutionRepository:
                 .order_by(ToolCallRecord.created_at)
             )
             return list(result.scalars().all())
+
+    async def compute_and_upsert_metrics(self, execution_id: uuid.UUID) -> ExecutionMetricsCache:
+        async with SessionLocal() as session:
+            execution = await session.get(Execution, execution_id)
+            if not execution:
+                raise ValueError(f"Execution {execution_id} not found")
+
+            steps_result = await session.execute(
+                select(
+                    func.count().label("total_steps"),
+                    func.avg(ExecutionStep.latency_ms).label("avg_latency"),
+                    func.sum(case((ExecutionStep.status == "failed", 1), else_=0)).label(
+                        "error_count"
+                    ),
+                ).where(ExecutionStep.execution_id == execution_id)
+            )
+            steps_row = steps_result.one()
+
+            llm_result = await session.execute(
+                select(
+                    func.count().label("total_calls"),
+                    func.coalesce(func.sum(LLMCall.estimated_tokens_input), 0).label(
+                        "total_tokens_in"
+                    ),
+                    func.coalesce(func.sum(LLMCall.estimated_tokens_output), 0).label(
+                        "total_tokens_out"
+                    ),
+                    func.avg(LLMCall.latency_ms).label("avg_latency"),
+                ).where(LLMCall.execution_id == execution_id)
+            )
+            llm_row = llm_result.one()
+
+            tool_result = await session.execute(
+                select(func.count()).where(ToolCallRecord.execution_id == execution_id)
+            )
+            total_tool_calls = tool_result.scalar() or 0
+
+            total_duration = None
+            if execution.started_at and execution.completed_at:
+                total_duration = int(
+                    (execution.completed_at - execution.started_at).total_seconds() * 1000
+                )
+
+            stmt = (
+                insert(ExecutionMetricsCache)
+                .values(
+                    execution_id=execution_id,
+                    trace_id=execution.trace_id,
+                    total_duration_ms=total_duration,
+                    total_llm_calls=llm_row.total_calls or 0,
+                    total_tool_calls=total_tool_calls,
+                    total_steps=steps_row.total_steps or 0,
+                    total_tokens_input=llm_row.total_tokens_in or 0,
+                    total_tokens_output=llm_row.total_tokens_out or 0,
+                    estimated_cost_usd=0.0,
+                    avg_step_latency_ms=steps_row.avg_latency,
+                    avg_llm_latency_ms=llm_row.avg_latency,
+                    error_count=steps_row.error_count or 0,
+                )
+                .on_conflict_do_update(
+                    constraint="execution_metrics_cache_pkey",
+                    set_={
+                        "trace_id": execution.trace_id,
+                        "total_duration_ms": total_duration,
+                        "total_llm_calls": llm_row.total_calls or 0,
+                        "total_tool_calls": total_tool_calls,
+                        "total_steps": steps_row.total_steps or 0,
+                        "total_tokens_input": llm_row.total_tokens_in or 0,
+                        "total_tokens_output": llm_row.total_tokens_out or 0,
+                        "estimated_cost_usd": 0.0,
+                        "avg_step_latency_ms": steps_row.avg_latency,
+                        "avg_llm_latency_ms": llm_row.avg_latency,
+                        "error_count": steps_row.error_count or 0,
+                        "updated_at": now(),
+                    },
+                )
+                .returning(ExecutionMetricsCache)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            metrics = result.scalar_one()
+            logger.info("Computed and cached metrics for execution %s", execution_id)
+            return metrics
 
     async def get_metrics(self, trace_id: str) -> ExecutionMetricsCache | None:
         async with SessionLocal() as session:

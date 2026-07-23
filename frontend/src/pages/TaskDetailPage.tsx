@@ -42,7 +42,7 @@ export function TaskDetailPage() {
   }, [traceId]);
 
   if (isLoading) return <div style={{ textAlign: "center", padding: "3rem" }}>Loading task detail...</div>;
-  if (error) return <div style={{ padding: "1rem", background: "var(--accent-bg)", color: "var(--accent" }}>Error: {error}</div>;
+  if (error) return <div style={{ padding: "1rem", background: "var(--accent-bg)", color: "var(--accent)" }}>Error: {error}</div>;
   if (!detail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
 
   return (
@@ -80,7 +80,7 @@ export function TaskDetailPage() {
 
       <div style={{ marginBottom: "2rem" }}>
         <strong>Task Description:</strong>
-        <p style={{ marginTop: "0.5rem", background: "#f9f9f9", padding: "1rem", borderRadius: "4px" }}>
+        <p style={{ marginTop: "0.5rem", background: "var(--accent-bg)", padding: "1rem", borderRadius: "4px" }}>
           {detail.task_description}
         </p>
       </div>
@@ -88,19 +88,19 @@ export function TaskDetailPage() {
       {/* Execution steps */}
       <h3>Execution Steps</h3>
       {detail.steps.length === 0 ? (
-        <p style={{ color: "#999" }}>No steps recorded.</p>
+        <p style={{ color: "var(--text)" }}>No steps recorded.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem" }}>
           {detail.steps.map((step) => (
             <div key={step.id} style={{
               padding: "1rem",
-              border: "1px solid #ddd",
+              border: "1px solid var(--border)",
               borderRadius: "4px",
-              background: step.status === "completed" ? "#fafffa" : step.status === "failed" ? "#fffafa" : "#fafaff",
+              background: step.status === "completed" ? "#dfd" : step.status === "failed" ? "#fdd" : "#ffd",
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                 <strong>{step.agent_name}</strong>
-                <span style={{ fontSize: "0.875rem", color: "#666" }}>
+                <span style={{ fontSize: "0.875rem", color: "var(--text)" }}>
                   {step.latency_ms ? `${step.latency_ms}ms` : "-"} | {step.step_type || "-"}
                 </span>
               </div>
@@ -121,7 +121,7 @@ export function TaskDetailPage() {
           <div style={{
             marginTop: "0.5rem",
             padding: "1rem",
-            background: "#f9f9f9",
+            background: "var(--accent-bg)",
             borderRadius: "4px",
             whiteSpace: "pre-wrap",
             fontFamily: "monospace",
@@ -137,8 +137,8 @@ export function TaskDetailPage() {
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ padding: "1rem", background: "#f9f9f9", borderRadius: "4px", textAlign: "center" }}>
-      <div style={{ fontSize: "0.75rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+    <div style={{ padding: "1rem", background: "var(--accent-bg)", borderRadius: "4px", textAlign: "center" }}>
+      <div style={{ fontSize: "0.75rem", color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
       <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: "0.25rem" }}>{value}</div>
     </div>
   );

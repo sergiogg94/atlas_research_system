@@ -2,10 +2,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
 from app.core.orchestrator import (
-    MAX_TOTAL_STEPS,
     DEGRADATION_THRESHOLD,
+    MAX_TOTAL_STEPS,
+    _build_data_context,
     _next_agent,
     _record_execution_step,
     _sanitize_for_json,
@@ -30,16 +30,20 @@ from test_planner import FAKE_PLAN
 
 class FakePlanObj:
     """Wraps a dict to mimic a Pydantic model's .model_dump()."""
+
     def __init__(self, data: dict):
         self._data = data
+
     def model_dump(self) -> dict:
         return self._data
 
 
 class FakeCompiledGraph:
     """Mocks a compiled langgraph StateGraph with a fixed return value."""
+
     def __init__(self, return_value: dict | None = None):
         self.return_value = return_value or {}
+
     async def ainvoke(self, state: dict) -> dict:
         return self.return_value
 
@@ -48,8 +52,18 @@ FAKE_PLAN_NO_ANALYSIS = {
     "objective": "Research AI in healthcare",
     "assumptions": ["AI is growing"],
     "steps": [
-        {"step": 1, "action": "Define scope", "expected_output": "Scope doc", "step_type": "scoping"},
-        {"step": 2, "action": "Gather recent information", "expected_output": "Report", "step_type": "research"},
+        {
+            "step": 1,
+            "action": "Define scope",
+            "expected_output": "Scope doc",
+            "step_type": "scoping",
+        },
+        {
+            "step": 2,
+            "action": "Gather recent information",
+            "expected_output": "Report",
+            "step_type": "research",
+        },
     ],
 }
 
@@ -87,6 +101,7 @@ def mock_execution_repo():
         mock_repo.create_execution = AsyncMock(return_value=mock_exec)
         mock_repo.add_step = AsyncMock(return_value=MagicMock(id=uuid4()))
         mock_repo.update_execution = AsyncMock()
+        mock_repo.compute_and_upsert_metrics = AsyncMock()
         yield mock_repo
 
 
@@ -110,10 +125,21 @@ async def test_full_pipeline_mocked():
     synthesis_return = {"report": "Final report text"}
 
     with (
-        patch("app.core.orchestrator.build_planner_graph", return_value=FakeCompiledGraph(planner_return)),
-        patch("app.core.orchestrator.build_research_graph", return_value=FakeCompiledGraph(research_return)),
-        patch("app.core.orchestrator.build_data_graph", return_value=FakeCompiledGraph(data_return)),
-        patch("app.core.orchestrator.build_synthesis_graph", return_value=FakeCompiledGraph(synthesis_return)),
+        patch(
+            "app.core.orchestrator.build_planner_graph",
+            return_value=FakeCompiledGraph(planner_return),
+        ),
+        patch(
+            "app.core.orchestrator.build_research_graph",
+            return_value=FakeCompiledGraph(research_return),
+        ),
+        patch(
+            "app.core.orchestrator.build_data_graph", return_value=FakeCompiledGraph(data_return)
+        ),
+        patch(
+            "app.core.orchestrator.build_synthesis_graph",
+            return_value=FakeCompiledGraph(synthesis_return),
+        ),
     ):
         graph = build_orchestrator_graph()
         result = await graph.ainvoke(INITIAL_STATE)
@@ -134,10 +160,19 @@ async def test_skip_data_when_not_needed():
     synthesis_return = {"report": "Report without data analysis"}
 
     with (
-        patch("app.core.orchestrator.build_planner_graph", return_value=FakeCompiledGraph(planner_return)),
-        patch("app.core.orchestrator.build_research_graph", return_value=FakeCompiledGraph(research_return)),
+        patch(
+            "app.core.orchestrator.build_planner_graph",
+            return_value=FakeCompiledGraph(planner_return),
+        ),
+        patch(
+            "app.core.orchestrator.build_research_graph",
+            return_value=FakeCompiledGraph(research_return),
+        ),
         patch("app.core.orchestrator.build_data_graph", return_value=FakeCompiledGraph()),
-        patch("app.core.orchestrator.build_synthesis_graph", return_value=FakeCompiledGraph(synthesis_return)),
+        patch(
+            "app.core.orchestrator.build_synthesis_graph",
+            return_value=FakeCompiledGraph(synthesis_return),
+        ),
     ):
         graph = build_orchestrator_graph()
         result = await graph.ainvoke(INITIAL_STATE)
@@ -160,14 +195,23 @@ async def test_replan_on_error():
     class FakeReplanProvider:
         async def generate(self, prompt: str, system: str | None = None) -> str:
             return '{"decision": "skip", "reason": "testing recovery"}'
+
         async def list_models(self) -> list[str]:
             return ["fake"]
 
     with (
-        patch("app.core.orchestrator.build_planner_graph", return_value=FakeCompiledGraph(planner_return)),
+        patch(
+            "app.core.orchestrator.build_planner_graph",
+            return_value=FakeCompiledGraph(planner_return),
+        ),
         patch("app.core.orchestrator.run_research", failing_research),
-        patch("app.core.orchestrator.build_data_graph", return_value=FakeCompiledGraph(data_return)),
-        patch("app.core.orchestrator.build_synthesis_graph", return_value=FakeCompiledGraph(synthesis_return)),
+        patch(
+            "app.core.orchestrator.build_data_graph", return_value=FakeCompiledGraph(data_return)
+        ),
+        patch(
+            "app.core.orchestrator.build_synthesis_graph",
+            return_value=FakeCompiledGraph(synthesis_return),
+        ),
         patch("app.core.orchestrator.get_llm_provider", return_value=FakeReplanProvider()),
     ):
         graph = build_orchestrator_graph()
@@ -183,7 +227,9 @@ async def test_max_steps_limit():
     planner_return = {"plan": FakePlanObj(FAKE_PLAN)}
     near_limit_state = {**INITIAL_STATE, "total_steps": MAX_TOTAL_STEPS}
 
-    with patch("app.core.orchestrator.build_planner_graph", return_value=FakeCompiledGraph(planner_return)):
+    with patch(
+        "app.core.orchestrator.build_planner_graph", return_value=FakeCompiledGraph(planner_return)
+    ):
         graph = build_orchestrator_graph()
         result = await graph.ainvoke(near_limit_state)
 
@@ -203,6 +249,7 @@ async def test_checkpoint_persistence(mock_redis):
 # =============================================================================
 # Agent error paths — planner, research, data, synthesis
 # =============================================================================
+
 
 async def _agent_error_state():
     return {
@@ -227,9 +274,11 @@ async def test_run_planner_graph_exception():
             raise RuntimeError("Planner crashed")
 
     with patch("app.core.orchestrator.build_planner_graph", return_value=FailingGraph()):
-        result = await run_planner({
-            "task_description": "Research AI in healthcare",
-        })
+        result = await run_planner(
+            {
+                "task_description": "Research AI in healthcare",
+            }
+        )
 
     assert result.get("error") is not None
     assert "Planner failed" in result["error"]
@@ -242,9 +291,11 @@ async def test_run_planner_result_error():
             return {"error": "Planner validation error"}
 
     with patch("app.core.orchestrator.build_planner_graph", return_value=ErrorGraph()):
-        result = await run_planner({
-            "task_description": "Research AI in healthcare",
-        })
+        result = await run_planner(
+            {
+                "task_description": "Research AI in healthcare",
+            }
+        )
 
     assert result.get("error") is not None
     assert "Planner validation error" in result["error"]
@@ -357,6 +408,7 @@ async def test_run_synthesis_result_error():
 # =============================================================================
 # Checkpoint failure
 # =============================================================================
+
 
 @pytest.mark.asyncio
 async def test_save_checkpoint_redis_failure(mock_redis):
@@ -543,7 +595,8 @@ async def test_check_degradation_triggers_above_threshold():
 @pytest.mark.asyncio
 async def test_check_max_steps_below_limit():
     state = {
-        **INITIAL_STATE, "total_steps": MAX_TOTAL_STEPS - 1,
+        **INITIAL_STATE,
+        "total_steps": MAX_TOTAL_STEPS - 1,
         "execution_id": str(uuid4()),
     }
     result = await check_max_steps(state)
@@ -553,7 +606,8 @@ async def test_check_max_steps_below_limit():
 @pytest.mark.asyncio
 async def test_check_max_steps_at_limit():
     state = {
-        **INITIAL_STATE, "total_steps": MAX_TOTAL_STEPS,
+        **INITIAL_STATE,
+        "total_steps": MAX_TOTAL_STEPS,
         "execution_id": str(uuid4()),
     }
     result = await check_max_steps(state)
@@ -682,8 +736,6 @@ def test_sanitize_for_json_mixed_simple_and_complex():
 # _build_data_context — context truncation
 # =============================================================================
 
-from app.core.orchestrator import _build_data_context
-
 
 def test_build_data_context_truncates_when_over_5000_chars():
     long_finding = {
@@ -776,7 +828,9 @@ def test_sanitize_for_json_handles_nested_dicts_in_lists():
 async def test_record_execution_step_without_execution_id():
     state = {**INITIAL_STATE, "execution_id": None}
     result = await _record_execution_step(
-        state=state, agent_name="test", step_type="test",
+        state=state,
+        agent_name="test",
+        step_type="test",
     )
     assert result is None
 
@@ -785,7 +839,9 @@ async def test_record_execution_step_without_execution_id():
 async def test_record_execution_step_with_invalid_execution_id():
     state = {**INITIAL_STATE, "execution_id": "not-a-uuid"}
     result = await _record_execution_step(
-        state=state, agent_name="test", step_type="test",
+        state=state,
+        agent_name="test",
+        step_type="test",
     )
     assert result is None
 
@@ -798,7 +854,9 @@ async def test_record_execution_step_repository_failure():
 
     with patch("app.core.orchestrator.execution_repository.add_step", mock_add_step):
         result = await _record_execution_step(
-            state=state, agent_name="test", step_type="test",
+            state=state,
+            agent_name="test",
+            step_type="test",
         )
 
     assert result is None

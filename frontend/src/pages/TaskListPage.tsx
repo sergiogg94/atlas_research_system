@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
 import type { ExecutionSummary } from "../types/api";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { StatusBadge } from "../components/StatusBadge";
 
 export function TaskListPage() {
   const [executions, setExecutions] = useState<ExecutionSummary[]>([]);
@@ -36,20 +39,8 @@ export function TaskListPage() {
 
   const totalPages = Math.ceil(total / 20);
 
-  if (isLoading) return <div style={{ textAlign: "center", padding: "3rem" }}>Loading tasks...</div>;
-  if (error) return (
-    <div
-      style={{
-        padding: "1rem",
-        background: "var(--accent-bg)",
-        color: "var(--accent)",
-        border: "1px solid var(--accent-border)",
-        borderRadius: "0.5rem",
-      }}
-    >
-      Error: {error}
-    </div>
-  );
+  if (isLoading) return <LoadingSpinner message="Loading tasks..." />;
+  if (error) return <ErrorMessage message={error} onRetry={() => { setError(null); setPage(1); }} />;
 
   return (
     <div>
@@ -74,15 +65,7 @@ export function TaskListPage() {
               <tr key={exec.id} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ padding: "0.75rem" }}>{exec.task_description.slice(0, 80)}...</td>
                 <td style={{ padding: "0.75rem" }}>
-                  <span style={{
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "4px",
-                    fontSize: "0.875rem",
-                    background: exec.status === "completed" ? "#dfd" : exec.status === "failed" ? "#fdd" : "#ffd",
-                    color: exec.status === "completed" ? "#090" : exec.status === "failed" ? "#c00" : "#960",
-                  }}>
-                    {exec.status}
-                  </span>
+                  <StatusBadge status={exec.status} />
                 </td>
                 <td style={{ padding: "0.75rem" }}>{exec.total_steps}</td>
                 <td style={{ padding: "0.75rem" }}>{exec.created_at ? new Date(exec.created_at).toLocaleString() : "-"}</td>

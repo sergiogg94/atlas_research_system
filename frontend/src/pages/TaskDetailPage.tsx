@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../services/api";
 import type { ExecutionDetail, ExecutionMetrics } from "../types/api";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { StatusBadge } from "../components/StatusBadge";
 
 export function TaskDetailPage() {
   const { traceId } = useParams<{ traceId: string }>();
@@ -9,6 +12,7 @@ export function TaskDetailPage() {
   const [metrics, setMetrics] = useState<ExecutionMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!traceId) return;
@@ -39,10 +43,10 @@ export function TaskDetailPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [traceId]);
+  }, [traceId, retryCount]);
 
-  if (isLoading) return <div style={{ textAlign: "center", padding: "3rem" }}>Loading task detail...</div>;
-  if (error) return <div style={{ padding: "1rem", background: "var(--accent-bg)", color: "var(--accent)" }}>Error: {error}</div>;
+  if (isLoading) return <LoadingSpinner message="Loading task detail..." />;
+  if (error) return <ErrorMessage message={error} onRetry={() => { setError(null); setRetryCount(c => c + 1); }} />;
   if (!detail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
 
   return (
@@ -69,13 +73,7 @@ export function TaskDetailPage() {
       {/* Status and description */}
       <div style={{ marginBottom: "2rem" }}>
         <strong>Status: </strong>
-        <span style={{
-          padding: "0.25rem 0.5rem",
-          borderRadius: "4px",
-          background: detail.status === "completed" ? "#dfd" : detail.status === "failed" ? "#fdd" : "#ffd",
-        }}>
-          {detail.status}
-        </span>
+        <StatusBadge status={detail.status} />
       </div>
 
       <div style={{ marginBottom: "2rem" }}>

@@ -9,10 +9,12 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const charCount = description.length;
+  const isValidLength = charCount >= 10;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (description.length < 10) return;
+    if (!isValidLength) return;
 
     setIsLoading(true);
     setError(null);
@@ -55,21 +57,21 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
             boxShadow: "inset 0 0 0 1px var(--accent-border)",
           }}
         />
-        <small style={{ color: description.length < 10 ? "var(--accent)" : "var(--text-h)" }}>
-          {description.length}/10 minimum characters
+        <small style={{ color: isValidLength ? "var(--accent)" : "var(--text-h)" }}>
+          {charCount}/10 characters {isValidLength ? "✓" : "(minimum)"}
         </small>
       </div>
 
       <button
         type="submit"
-        disabled={isLoading || description.length < 10}
+        disabled={isLoading || !isValidLength}
         style={{
           padding: "0.75rem 2rem",
-          background: description.length >= 10 ? "var(--accent)" : "var(--border)",
+          background: isValidLength ? "var(--accent)" : "var(--border)",
           color: "var(--text-h)",
           border: "1px solid var(--accent-border)",
           borderRadius: "4px",
-          cursor: description.length >= 10 ? "pointer" : "not-allowed",
+          cursor: isValidLength ? "pointer" : "not-allowed",
           fontSize: "1rem",
         }}
       >

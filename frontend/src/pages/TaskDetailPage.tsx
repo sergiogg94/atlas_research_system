@@ -45,6 +45,24 @@ export function TaskDetailPage() {
     return () => { cancelled = true; };
   }, [traceId, retryCount]);
 
+  useEffect(() => {
+    if (!traceId) return;
+
+    const isActive = detail?.status === "running" || detail?.status === "pending";
+    if (!isActive) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await (api.getTaskDetail(traceId) as Promise<{ execution: ExecutionDetail }>);
+        setDetail(response.execution);
+      } catch {
+        // Silently retry on next interval
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [traceId, detail?.status]);
+
   if (isLoading) return <LoadingSpinner message="Loading task detail..." />;
   if (error) return <ErrorMessage message={error} onRetry={() => { setError(null); setRetryCount(c => c + 1); }} />;
   if (!detail) return <div style={{ padding: "1rem" }}>Task not found.</div>;

@@ -31,12 +31,9 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: "600px", margin: "2rem 0" }}>
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="task"
-          style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "var(--text-h)" }}
-        >
+    <form onSubmit={handleSubmit} className="form">
+      <div className="form-group">
+        <label htmlFor="task" className="form-label">
           Task Description
         </label>
         <textarea
@@ -45,50 +42,23 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe the research task you want to execute..."
           rows={4}
-          style={{
-            width: "100%",
-            padding: "0.75rem",
-            border: "1px solid var(--border)",
-            borderRadius: "4px",
-            fontFamily: "inherit",
-            fontSize: "1rem",
-            background: "var(--bg)",
-            color: "var(--text-h)",
-            boxShadow: "inset 0 0 0 1px var(--accent-border)",
-          }}
+          className="form-textarea"
         />
-        <small style={{ color: isValidLength ? "var(--accent)" : "var(--text-h)" }}>
-          {charCount}/10 characters {isValidLength ? "✓" : "(minimum)"}
+        <small className={isValidLength ? "char-count" : "char-count--warn"}>
+          {charCount}/10 characters {isValidLength ? "\u2713" : "(minimum)"}
         </small>
       </div>
 
       <button
         type="submit"
         disabled={isLoading || !isValidLength}
-        style={{
-          padding: "0.75rem 2rem",
-          background: isValidLength ? "var(--accent)" : "var(--border)",
-          color: "var(--text-h)",
-          border: "1px solid var(--accent-border)",
-          borderRadius: "4px",
-          cursor: isValidLength ? "pointer" : "not-allowed",
-          fontSize: "1rem",
-        }}
+        className="btn"
       >
         {isLoading ? "Executing..." : "Execute Task"}
       </button>
 
       {error && (
-        <div
-          style={{
-            marginTop: "1rem",
-            padding: "0.75rem",
-            background: "var(--accent-bg)",
-            color: "var(--accent)",
-            border: "1px solid var(--accent-border)",
-            borderRadius: "4px",
-          }}
-        >
+        <div className="error-box" style={{ marginTop: "1rem" }}>
           Error: {error}
         </div>
       )}

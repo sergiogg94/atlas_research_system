@@ -45,31 +45,31 @@ export function TaskListPage() {
   return (
     <div>
       <h2>Execution History</h2>
-      <p style={{ color: "var(--text)" }}>{total} total executions</p>
+      <p className="text-muted">{total} total executions</p>
 
       {executions.length === 0 ? (
-        <p style={{ marginTop: "2rem", color: "var(--text)" }}>No executions yet. Create one from the home page.</p>
+        <p className="mt-2 text-muted">No executions yet. Create one from the home page.</p>
       ) : (
-        <table style={{ width: "100%", marginTop: "1rem", borderCollapse: "collapse" }}>
+        <table className="table">
           <thead>
-            <tr style={{ textAlign: "left", borderBottom: "2px solid var(--border)" }}>
-              <th style={{ padding: "0.75rem" }}>Task</th>
-              <th style={{ padding: "0.75rem" }}>Status</th>
-              <th style={{ padding: "0.75rem" }}>Steps</th>
-              <th style={{ padding: "0.75rem" }}>Created</th>
-              <th style={{ padding: "0.75rem" }}>Actions</th>
+            <tr>
+              <th>Task</th>
+              <th>Status</th>
+              <th>Steps</th>
+              <th>Created</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {executions.map((exec) => (
-              <tr key={exec.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: "0.75rem" }}>{exec.task_description.slice(0, 80)}...</td>
-                <td style={{ padding: "0.75rem" }}>
+              <tr key={exec.id}>
+                <td>{exec.task_description.slice(0, 80)}...</td>
+                <td>
                   <StatusBadge status={exec.status} />
                 </td>
-                <td style={{ padding: "0.75rem" }}>{exec.total_steps}</td>
-                <td style={{ padding: "0.75rem" }}>{exec.created_at ? new Date(exec.created_at).toLocaleString() : "-"}</td>
-                <td style={{ padding: "0.75rem" }}>
+                <td>{exec.total_steps}</td>
+                <td>{exec.created_at ? new Date(exec.created_at).toLocaleString() : "-"}</td>
+                <td>
                   <Link to={`/tasks/${exec.trace_id}`}>View Details</Link>
                 </td>
               </tr>
@@ -78,35 +78,20 @@ export function TaskListPage() {
         </table>
       )}
 
-      {/* Paginación simple */}
       {totalPages > 1 && (
-        <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+        <div className="pagination">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            style={{
-              padding: "0.5rem 1rem",
-              background: page <= 1 ? "var(--border)" : "var(--accent)",
-              color: "var(--text-h)",
-              border: "1px solid var(--accent-border)",
-              borderRadius: "0.5rem",
-              cursor: page <= 1 ? "not-allowed" : "pointer",
-            }}
+            className="btn btn-sm"
           >
             Previous
           </button>
-          <span style={{ padding: "0.5rem", color: "var(--text)" }}>Page {page} of {totalPages}</span>
+          <span className="pagination-info">Page {page} of {totalPages}</span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
-            style={{
-              padding: "0.5rem 1rem",
-              background: page >= totalPages ? "var(--border)" : "var(--accent)",
-              color: "var(--text-h)",
-              border: "1px solid var(--accent-border)",
-              borderRadius: "0.5rem",
-              cursor: page >= totalPages ? "not-allowed" : "pointer",
-            }}
+            className="btn btn-sm"
           >
             Next
           </button>

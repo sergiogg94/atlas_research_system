@@ -69,13 +69,12 @@ export function TaskDetailPage() {
 
   return (
     <div>
-      <Link to="/tasks" style={{ marginBottom: "1rem", display: "inline-block" }}>&larr; Back to History</Link>
+      <Link to="/tasks" className="mb-1 inline-block">&larr; Back to History</Link>
 
       <h2>Task Detail</h2>
-      <p style={{ color: "var(--text)", marginBottom: "2rem" }}>Trace ID: {detail.trace_id}</p>
+      <p className="text-muted mb-2">Trace ID: {detail.trace_id}</p>
 
-      {/* Quiqk metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
+      <div className="metric-grid">
         {metrics && (
           <>
             <MetricCard label="Duration" value={metrics.total_duration_ms ? `${(metrics.total_duration_ms / 1000).toFixed(1)}s` : "-"} />
@@ -88,61 +87,48 @@ export function TaskDetailPage() {
         )}
       </div>
 
-      {/* Status and description */}
-      <div style={{ marginBottom: "2rem" }}>
+      <div className="detail-section">
         <strong>Status: </strong>
         <StatusBadge status={detail.status} />
       </div>
 
-      <div style={{ marginBottom: "2rem" }}>
+      <div className="detail-section">
         <strong>Task Description:</strong>
-        <p style={{ marginTop: "0.5rem", background: "var(--accent-bg)", padding: "1rem", borderRadius: "4px" }}>
+        <p className="detail-description">
           {detail.task_description}
         </p>
       </div>
 
-      {/* Execution steps */}
       <h3>Execution Steps</h3>
       {detail.steps.length === 0 ? (
-        <p style={{ color: "var(--text)" }}>No steps recorded.</p>
+        <p className="text-muted">No steps recorded.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem" }}>
-          {detail.steps.map((step) => (
-            <div key={step.id} style={{
-              padding: "1rem",
-              border: "1px solid var(--border)",
-              borderRadius: "4px",
-              background: step.status === "completed" ? "#dfd" : step.status === "failed" ? "#fdd" : "#ffd",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                <strong>{step.agent_name}</strong>
-                <span style={{ fontSize: "0.875rem", color: "var(--text)" }}>
-                  {step.latency_ms ? `${step.latency_ms}ms` : "-"} | {step.step_type || "-"}
-                </span>
-              </div>
-              {step.error && (
-                <div style={{ color: "#c00", fontSize: "0.875rem", marginTop: "0.25rem" }}>
-                  Error: {step.error}
+        <div className="steps-list">
+          {detail.steps.map((step) => {
+            const statusClass = step.status === "completed" ? "step-card--completed" : step.status === "failed" ? "step-card--failed" : "step-card--default";
+            return (
+              <div key={step.id} className={`step-card ${statusClass}`}>
+                <div className="step-card-header">
+                  <strong>{step.agent_name}</strong>
+                  <span className="step-card-meta">
+                    {step.latency_ms ? `${step.latency_ms}ms` : "-"} | {step.step_type || "-"}
+                  </span>
                 </div>
-              )}
-            </div>
-          ))}
+                {step.error && (
+                  <div className="step-card-error">
+                    Error: {step.error}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Final report */}
       {detail.report && (
-        <div style={{ marginTop: "2rem" }}>
+        <div className="mt-2">
           <h3>Generated Report</h3>
-          <div style={{
-            marginTop: "0.5rem",
-            padding: "1rem",
-            background: "var(--accent-bg)",
-            borderRadius: "4px",
-            whiteSpace: "pre-wrap",
-            fontFamily: "monospace",
-            fontSize: "0.875rem",
-          }}>
+          <div className="report-box">
             {detail.report}
           </div>
         </div>
@@ -153,9 +139,9 @@ export function TaskDetailPage() {
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ padding: "1rem", background: "var(--accent-bg)", borderRadius: "4px", textAlign: "center" }}>
-      <div style={{ fontSize: "0.75rem", color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-      <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: "0.25rem" }}>{value}</div>
+    <div className="metric-card">
+      <div className="metric-card-label">{label}</div>
+      <div className="metric-card-value">{value}</div>
     </div>
   );
 }

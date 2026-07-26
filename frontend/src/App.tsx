@@ -5,6 +5,7 @@ import { TaskListPage } from "./pages/TaskListPage";
 import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import './App.css'
+import './styles.css'
 
 function App() {
   return (

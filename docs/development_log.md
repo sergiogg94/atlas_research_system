@@ -256,3 +256,45 @@ This week was dedicated to hardening the codebase: comprehensive test expansion 
 3. **Pre-commit hook ordering matters** — Ruff lint + format must run before mypy because mypy checks the formatted code. Running mypy first produces false positives from unformatted line lengths or style violations that ruff would fix.
 4. **Coverage without quality thresholds is vanity** — High line coverage doesn't guarantee correctness. The most valuable tests were the edge-case ones (invalid UUIDs, DB failures, malformed LLM responses), not the happy-path mocks.
 5. **CI service containers are cheap but powerful** — GitHub Actions provides Postgres and Redis containers at no extra cost. The ~30s startup overhead is negligible compared to the confidence gained from running tests against real database and cache instances.
+
+---
+
+## Week 8: Frontend Implementation & Execution Metrics Persistence
+
+### Summary
+This week delivered the long-awaited React frontend from scratch, connecting the multi-agent backend to a real user interface. A complete single-page application was built with Vite, TypeScript, and React Router, featuring task creation, execution history, and detailed drill-down with live polling. On the backend side, execution metrics are now computed and persisted after every failure path, completing the observability feedback loop started in Week 6.
+
+### Key Deliverables
+- **Frontend scaffold** — Vite + React 19 + TypeScript + oxlint configured with full project structure (`frontend/`)
+- **Routing & navigation** — `react-router-dom` v7 with 4 routes: `/`, `/tasks`, `/tasks/:traceId`, `*` (404); persistent layout with nav header and footer
+- **API service layer** — `api.ts` with typed methods (`executeTask`, `listTasks`, `getTaskDetail`, `getTaskMetrics`), custom `ApiError` class, configurable timeout via `AbortController`, and centralized `handleResponse` for error extraction
+- **HomePage** — Welcome message + `TaskForm` component with character counter (min 10), submit to `POST /api/v1/execute-task`, redirect to detail page on success
+- **TaskListPage** — Paginated execution history table (`GET /api/v1/tasks`), `StatusBadge` for visual status indicators, Previous/Next pagination, loading/error/empty states
+- **TaskDetailPage** — Full execution detail with metric cards (duration, LLM/tool calls, tokens, cost, errors), execution step list with status-colored cards, and report display; auto-polling every 5s for running/pending tasks
+- **Reusable components** — `Layout`, `StatusBadge`, `ErrorMessage` (with retry callback), `LoadingSpinner`, `TaskForm`
+- **Custom `useApi` hook** — Generic hook encapsulating loading/error/data state with `refetch` support
+- **Dark theme** — CSS custom properties in `index.css` (dark color scheme), `styles.css` with utility classes, responsive typography
+- **Centralized CSS refactor** — Consolidated styles from inline/page-level into `styles.css` for maintainability
+- **Execution metrics computation** — `compute_and_upsert_metrics()` in `ExecutionRepository` using `INSERT ... ON CONFLICT DO UPDATE` with aggregated LLM calls, tool calls, steps, duration, and error counts; triggered on all orchestrator failure paths (planner, research, data, synthesis, degradation, max_steps)
+- **Orchestrator type refinements** — `_sanitize_for_json` signature updated to `dict[str, Any]`, `build_orchestrator_graph` return type to `CompiledStateGraph`, improved None-safety across context builders and routing functions
+- **Test expansion** — Orchestrator tests extended to cover execution metrics upsert on failure paths
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| Vite over CRA | Vite is the de facto standard for new React projects; instant HMR, native TypeScript, and faster builds. Outpaces CRA which is effectively deprecated. |
+| React Router v7 | Latest version with improved data loading patterns; file-based routing not used to keep simplicity for a small SPA |
+| Custom `ApiError` + `handleResponse` | Consistent error extraction with HTTP status, body, and truncated message; enables the frontend to display actionable error info |
+| `useApi` custom hook | Encapsulates the fetch/loading/error/repeat pattern into a reusable abstraction, reducing boilerplate across pages |
+| Auto-polling on detail page (5s interval) | Provides real-time progress feedback for long-running orchestrator executions without WebSocket complexity; interval cleared on unmount to prevent memory leaks |
+| `compute_and_upsert_metrics` on failure paths | Metrics were previously only computed on successful completion; this ensures failed executions also have their data recorded for diagnostics and history queries |
+| INSERT ... ON CONFLICT DO UPDATE | PostgreSQL-native upsert avoids race conditions between concurrent metric computations; idempotent by design |
+| CSS custom properties for theming | Enables easy theme switching (light/dark) by changing a single `:root` block; all components reference the same variables |
+
+### Key Learnings
+1. **Frontend from scratch is fast with modern tooling** — Vite + React 19 + TypeScript scaffold to working multi-page app took ~4 days. oxlint catches TypeScript/React issues instantly with near-zero config.
+2. **API service abstraction matters** — A centralized `api.ts` with typed methods, timeouts, and error handling prevented duplicated fetch logic across pages. The `AbortController` timeout pattern is cleaner than Promise.race.
+3. **Polling is simple and effective for short-lived feedback** — The 5s polling on TaskDetailPage provides good UX for executions that typically run 30-300s. The cleanup-on-unmount pattern (`cancelled` flag + `clearInterval`) prevents race conditions.
+4. **Fire-and-forget metrics computation has edge cases** — Calling `compute_and_upsert_metrics` after every failure path revealed UUID conversion and session management issues. The upsert pattern handles concurrent writes gracefully, but logging on failure was essential for debugging.
+5. **Responsive design with CSS custom properties** — A single `:root` block with `@media (max-width: 1024px)` breakpoints for font-size keeps the app readable on mobile without component-level media queries.
+6. **Type-safety across the frontend-backend boundary** — Defining `api.ts` types (ExecuteTaskResponse, ExecutionSummary, ExecutionDetail, ExecutionMetrics) that mirror the backend Pydantic schemas caught field mismatches early. The `resolveTraceId` pattern prevents routing parameter issues.

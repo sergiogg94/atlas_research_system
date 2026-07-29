@@ -34,7 +34,7 @@ app.include_router(research.router, prefix="/api/v1", tags=["research"])
 app.include_router(data.router, prefix="/api/v1", tags=["data"])
 app.include_router(orchestrator.router, prefix="/api/v1", tags=["orchestrator"])
 app.include_router(history.router, prefix="/api/v1", tags=["history"])
-app.include_router(stream.router, prefix="api/v1", tags=["stream"])
+app.include_router(stream.router, prefix="/api/v1", tags=["stream"])
 
 logger.info(
     "Routers registered: /api/v1/health, /api/v1/llm, /api/v1/plan, /api/v1/data,"

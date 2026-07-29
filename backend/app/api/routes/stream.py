@@ -76,8 +76,7 @@ async def execution_event_generator(trace_id: str):
 
 
 @router.get(
-    "tasks/{trace_id}/stream",
-    response_model=EventSourceResponse,
+    "/tasks/{trace_id}/stream",
     summary="SSE endpoint that pushes execution progress updates.",
 )
 async def stream_execution(trace_id: str):

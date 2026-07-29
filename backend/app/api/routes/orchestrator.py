@@ -39,6 +39,7 @@ async def execute_task(request: ExecuteTaskRequest):
         raise HTTPException(status_code=504, detail="Task execution timed out")
 
     return ExecuteTaskResponse(
+        status="success",
         task_id=task_id,
         objective=result.get("objective", ""),
         plan=result.get("plan"),

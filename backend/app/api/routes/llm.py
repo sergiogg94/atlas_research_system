@@ -1,4 +1,3 @@
-
 from app.core.llm.factory import get_llm_provider
 from app.core.logging import logger
 from app.schemas.llm import GenerateRequest, GenerateResponse, ModelsResponse
@@ -23,9 +22,7 @@ async def test_generate(request: GenerateRequest):
     try:
         response = await provider.generate(request.prompt, request.system)
     except TimeoutError:
-        logger.error(
-            "LLM generation timed out for provider=%s", type(provider).__name__
-        )
+        logger.error("LLM generation timed out for provider=%s", type(provider).__name__)
         raise HTTPException(status_code=504, detail="LLM generation timed out")
     logger.info(
         "Generate success: provider=%s response_len=%d",
@@ -35,6 +32,7 @@ async def test_generate(request: GenerateRequest):
     return GenerateResponse(
         provider=type(provider).__name__,
         response=response,
+        status="success",
     )
 
 
@@ -50,9 +48,7 @@ async def list_models():
     try:
         models = await provider.list_models()
     except TimeoutError:
-        logger.error(
-            "LLM model listing timed out for provider=%s", type(provider).__name__
-        )
+        logger.error("LLM model listing timed out for provider=%s", type(provider).__name__)
         raise HTTPException(status_code=504, detail="LLM model listing timed out")
     logger.info(
         "List models success: provider=%s count=%d",

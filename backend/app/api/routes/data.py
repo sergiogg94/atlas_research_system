@@ -34,6 +34,7 @@ async def execute_data_task(request: DataRequest):
         raise HTTPException(status_code=504, detail="Data task timed out")
 
     return DataResponse(
+        status="success",
         task=result["task"],
         code=result.get("code"),
         query=result.get("query"),

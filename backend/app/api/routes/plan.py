@@ -33,4 +33,4 @@ async def create_plan(request: PlanRequest):
         logger.error("Planner error: %s", result["error"])
         raise HTTPException(status_code=400, detail=result["error"])
 
-    return PlanResponse(plan=result["plan"])
+    return PlanResponse(plan=result["plan"], status="success")

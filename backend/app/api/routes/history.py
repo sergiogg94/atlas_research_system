@@ -97,7 +97,7 @@ async def get_execution(trace_id: str):
                     output_summary=str(s.output_summary),
                     status=str(s.status),
                     error=str(s.error),
-                    latency_ms=int(s.latency_ms),
+                    latency_ms=int(s.latency_ms) if s.latency_ms is not None else None,
                     created_at=cast(datetime, s.created_at),
                 )
                 for s in steps
@@ -114,9 +114,15 @@ async def get_execution(trace_id: str):
                     user_prompt=str(c.user_prompt),
                     response=str(c.response),
                     model=str(c.model),
-                    latency_ms=int(c.latency_ms),
-                    estimated_tokens_input=int(c.estimated_tokens_input),
-                    estimated_tokens_output=int(c.estimated_tokens_output),
+                    latency_ms=int(c.latency_ms) if c.latency_ms is not None else None,
+                    estimated_tokens_input=(
+                        int(c.estimated_tokens_input)
+                        if c.estimated_tokens_input is not None
+                        else None
+                    ),
+                    estimated_tokens_output=int(c.estimated_tokens_output)
+                    if c.estimated_tokens_output is not None
+                    else None,
                     created_at=cast(datetime, c.created_at),
                 )
                 for c in llm_calls
@@ -132,7 +138,7 @@ async def get_execution(trace_id: str):
                     input=str(t.input) if t.input else None,
                     output_preview=str(t.output_preview),
                     error=str(t.error),
-                    latency_ms=int(t.latency_ms),
+                    latency_ms=int(t.latency_ms) if t.latency_ms is not None else None,
                     created_at=cast(datetime, t.created_at),
                 )
                 for t in tool_calls
@@ -157,15 +163,21 @@ async def get_execution_metrics(trace_id: str):
         metrics=ExecutionMetrics(
             execution_id=str(metrics.execution_id),
             trace_id=str(metrics.trace_id),
-            total_duration_ms=int(metrics.total_duration_ms),
+            total_duration_ms=int(metrics.total_duration_ms)
+            if metrics.total_duration_ms is not None
+            else None,
             total_llm_calls=int(metrics.total_llm_calls),
             total_tool_calls=int(metrics.total_tool_calls),
             total_steps=int(metrics.total_steps),
             total_tokens_input=int(metrics.total_tokens_input),
             total_tokens_output=int(metrics.total_tokens_output),
             estimated_cost_usd=float(metrics.estimated_cost_usd),
-            avg_step_latency_ms=int(metrics.avg_step_latency_ms),
-            avg_llm_latency_ms=float(metrics.avg_llm_latency_ms),
+            avg_step_latency_ms=float(metrics.avg_step_latency_ms)
+            if metrics.avg_step_latency_ms is not None
+            else None,
+            avg_llm_latency_ms=float(metrics.avg_llm_latency_ms)
+            if metrics.avg_llm_latency_ms is not None
+            else None,
             error_count=int(metrics.error_count),
         ),
     )

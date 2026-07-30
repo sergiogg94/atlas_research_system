@@ -64,7 +64,7 @@ SQL (if analysis specifies it): write a single valid query with proper joins/agg
 Previous error (if retrying): {error}
 
 If retrying, fix the specific error shown.
-Return only the code in a markdown block with the language tag."""
+Return only the raw code. Do NOT use markdown formatting, code blocks, or backticks."""
     version = "1.0.0"
     description = "User prompt for python and SQL code generation for data analysis agent"
 

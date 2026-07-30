@@ -1,4 +1,5 @@
 import json
+import re
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -20,6 +21,15 @@ class DataState(TypedDict):
     iteration: int  # Iteration counter (max 3)
     analysis: str | None  # Result of the analysis
     trace_id: str
+
+
+def _strip_markdown_code(text: str) -> str:
+    """Extract code from markdown code blocks if present."""
+    pattern = r"```(?:\w+)?\n?(.*?)```"
+    matches = re.findall(pattern, text, re.DOTALL)
+    if matches:
+        return "\n\n".join(m.strip() for m in matches)
+    return text.strip()
 
 
 async def analyze_task(state: DataState) -> DataState:
@@ -57,7 +67,7 @@ async def generate_code(state: DataState) -> DataState:
         system=system_prompt.template,
     )
 
-    return {**state, "code": response}
+    return {**state, "code": _strip_markdown_code(response)}
 
 
 async def classify_output(state: DataState) -> DataState:
@@ -77,7 +87,7 @@ async def classify_output(state: DataState) -> DataState:
     )
 
     try:
-        parsed = json.loads(response.strip())
+        parsed = json.loads(_strip_markdown_code(response))
         code_type = parsed.get("type", "python")
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning("Failed to parse classify output: %s, defaulting to python", e)

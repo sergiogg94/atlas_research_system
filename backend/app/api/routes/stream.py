@@ -1,6 +1,5 @@
 import asyncio
 import json
-from uuid import UUID
 
 from app.core.execution_repository import execution_repository
 from fastapi import APIRouter
@@ -23,7 +22,7 @@ async def execution_event_generator(trace_id: str):
                 return
 
             status = str(execution.status)
-            steps = await execution_repository.get_steps(UUID(trace_id))
+            steps = await execution_repository.get_steps(execution.id)
             step_count = len(steps)
 
             # Only push event if something changed
@@ -33,6 +32,7 @@ async def execution_event_generator(trace_id: str):
 
                 steps_data = [
                     {
+                        "id": str(s.id),
                         "agent_name": s.agent_name,
                         "step_type": s.step_type,
                         "status": s.status,

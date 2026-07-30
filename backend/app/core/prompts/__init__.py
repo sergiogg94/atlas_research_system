@@ -6,6 +6,8 @@ from app.core.prompts.data import (
     ClassifyOutputUserPrompt,
     CodeGenSystemPrompt,
     CodeGenUserPrompt,
+    ReflectErrorSystemPrompt,
+    ReflectErrorUserPrompt,
 )
 from app.core.prompts.planner import PlannerSystemPrompt, PlannerUserPrompt
 from app.core.prompts.research import ResearchSystemPrompt, ResearchUserPrompt
@@ -24,6 +26,8 @@ _PROMPTS: dict[str, type] = {
     "data_classify_output_user": ClassifyOutputUserPrompt,
     "synthesis_system": SynthesisSystemPrompt,
     "synthesis_user": SynthesisUserPrompt,
+    "data_reflect_error_system": ReflectErrorSystemPrompt,
+    "data_reflect_error_user": ReflectErrorUserPrompt,
 }
 
 

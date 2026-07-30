@@ -20,6 +20,7 @@ class DataState(TypedDict):
     error: str | None
     iteration: int  # Iteration counter (max 3)
     analysis: str | None  # Result of the analysis
+    reflection: str | None  # Error analysis/fix plan from reflect_error node
     trace_id: str
 
 
@@ -63,6 +64,7 @@ async def generate_code(state: DataState) -> DataState:
             task=state["task"],
             analysis=state.get("analysis") or "",
             error=state.get("error") or "None",
+            reflection=state.get("reflection") or "None",
         ),
         system=system_prompt.template,
     )
@@ -103,6 +105,30 @@ async def classify_output(state: DataState) -> DataState:
         }
 
     return {**state, "code": parsed.get("python_code") or state["code"], "query": None}
+
+
+async def reflect_error(state: DataState) -> DataState:
+    """Analyzes the error and produces a reflection/fix plan."""
+    if not state.get("error") or not state.get("code"):
+        logger.debug("reflect_error skipped: no error or code to analyze")
+        return state
+
+    logger.info("Reflecting on execution error")
+    provider = get_llm_provider()
+    system_prompt = get_prompt("data_reflect_error_system")
+    user_prompt = get_prompt("data_reflect_error_user")
+
+    response = await provider.generate(
+        prompt=user_prompt.format(
+            task=state["task"],
+            analysis=state.get("analysis") or "",
+            code=state.get("code") or "",
+            error=state.get("error") or "",
+        ),
+        system=system_prompt.template,
+    )
+
+    return {**state, "reflection": response}
 
 
 async def execute_python(state: DataState) -> DataState:
@@ -182,6 +208,7 @@ def build_data_graph() -> CompiledStateGraph:
     workflow.add_node("analyze_task", analyze_task)
     workflow.add_node("generate_code", generate_code)
     workflow.add_node("classify_output", classify_output)
+    workflow.add_node("reflect_error", reflect_error)
     workflow.add_node("execute_python", execute_python)
     workflow.add_node("execute_sql", execute_sql)
 
@@ -189,6 +216,7 @@ def build_data_graph() -> CompiledStateGraph:
 
     workflow.add_edge("analyze_task", "generate_code")
     workflow.add_edge("generate_code", "classify_output")
+    workflow.add_edge("reflect_error", "generate_code")
 
     workflow.add_conditional_edges(
         "classify_output",
@@ -205,7 +233,7 @@ def build_data_graph() -> CompiledStateGraph:
         "execute_python",
         has_python_error,
         {
-            "retry": "generate_code",
+            "retry": "reflect_error",
             "sql_pending": "execute_sql",
             "success": END,
             "failed": END,
@@ -216,7 +244,7 @@ def build_data_graph() -> CompiledStateGraph:
         "execute_sql",
         has_sql_error,
         {
-            "retry": "generate_code",
+            "retry": "reflect_error",
             "success": END,
             "failed": END,
         },

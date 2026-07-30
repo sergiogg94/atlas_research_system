@@ -63,7 +63,9 @@ SQL (if analysis specifies it): write a single valid query with proper joins/agg
 
 Previous error (if retrying): {error}
 
-If retrying, fix the specific error shown.
+Reflection on error (if retrying): {reflection}
+
+If retrying, follow the reflection's fix plan and fix the specific error shown.
 Return only the raw code. Do NOT use markdown formatting, code blocks, or backticks."""
     version = "1.0.0"
     description = "User prompt for python and SQL code generation for data analysis agent"
@@ -88,3 +90,36 @@ class ClassifyOutputUserPrompt(PromptTemplate):
 {code}"""
     version = "1.0.0"
     description = "User prompt for classifying generated code"
+
+
+class ReflectErrorSystemPrompt(PromptTemplate):
+    template = """You are a debugger in a multi-agent research system.
+Your role is to analyze why generated Python/SQL code failed and produce
+a concise diagnosis with a specific fix plan."""
+    version = "1.0.0"
+    description = "System prompt for error reflection in data agent"
+
+
+class ReflectErrorUserPrompt(PromptTemplate):
+    template = """The following code was generated for the task below, but it failed on execution.
+
+Task: {task}
+Original analysis plan: {analysis}
+
+Generated code:
+{code}
+
+Execution error:
+{error}
+
+Analyze why the code failed. Consider:
+1. Is the code syntactically valid?
+2. Does it use allowed libraries correctly?
+3. Is the logic correct for the task?
+4. Are there any missing imports, undefined variables, or type errors?
+5. Does it try to do I/O, use disallowed functions, or access non-existent data?
+
+Then produce a specific fix plan (1-3 sentences). Focus on WHAT to change,
+not just describing the error."""
+    version = "1.0.0"
+    description = "User prompt for error reflection in data agent"

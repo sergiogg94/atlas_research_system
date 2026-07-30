@@ -1,8 +1,8 @@
 import type { ExecuteTaskResponse, ExecutionListResponse } from "../types/api";
 
-const API_BASE = "http://localhost:8000/api/v1";
+export const API_BASE = "http://localhost:8000/api/v1";
 
-class ApiError extends Error {
+export class ApiError extends Error {
   statusCode?: number;
   body?: unknown;
 

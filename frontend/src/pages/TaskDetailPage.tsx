@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api } from "../services/api";
-import type { ExecutionDetail, ExecutionMetrics } from "../types/api";
+import { api, API_BASE, ApiError } from "../services/api";
+import { useEventSource } from "../hooks/useEventSource";
+import type { ExecutionDetail, ExecutionMetrics, StepDetail } from "../types/api";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { StatusBadge } from "../components/StatusBadge";
@@ -22,22 +23,26 @@ export function TaskDetailPage() {
 
     async function load() {
       type TaskDetailResponse = { execution: ExecutionDetail };
-      type TaskMetricsResponse = { metrics: ExecutionMetrics };
 
       try {
         setIsLoading(true);
-        const [detailResp, metricsResp] = await Promise.all([
-          api.getTaskDetail(resolvedTraceId) as Promise<TaskDetailResponse>,
-          api.getTaskMetrics(resolvedTraceId) as Promise<TaskMetricsResponse>,
-        ]);
-        if (!cancelled) {
-          setDetail(detailResp.execution);
-          setMetrics(metricsResp.metrics);
-        }
+        const detailResp = await (api.getTaskDetail(resolvedTraceId) as Promise<TaskDetailResponse>);
+        if (!cancelled) setDetail(detailResp.execution);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load task detail");
+        if (!cancelled) {
+          setError(err instanceof ApiError ? `HTTP ${err.statusCode}: ${err.body}` : err instanceof Error ? err.message : "Failed to load task detail");
+        }
+        return;
       } finally {
         if (!cancelled) setIsLoading(false);
+      }
+
+      try {
+        const metricsResp = await api.getTaskMetrics(resolvedTraceId) as { metrics: ExecutionMetrics };
+        if (!cancelled) setMetrics(metricsResp.metrics);
+      } catch (err) {
+        if (err instanceof ApiError && err.statusCode === 404) return;
+        if (!cancelled) console.warn("Failed to load metrics:", err);
       }
     }
 
@@ -45,23 +50,23 @@ export function TaskDetailPage() {
     return () => { cancelled = true; };
   }, [traceId, retryCount]);
 
-  useEffect(() => {
-    if (!traceId) return;
+  const isActive = detail?.status === "running" || detail?.status === "pending";
+  const sseUrl = traceId && isActive ? `${API_BASE}/tasks/${traceId}/stream` : null;
 
-    const isActive = detail?.status === "running" || detail?.status === "pending";
-    if (!isActive) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await (api.getTaskDetail(traceId) as Promise<{ execution: ExecutionDetail }>);
-        setDetail(response.execution);
-      } catch {
-        // Silently retry on next interval
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [traceId, detail?.status]);
+  useEventSource(sseUrl, {
+    onProgress: (data) => {
+      const { status, steps } = data as { status: string; steps: StepDetail[] };
+      setDetail(prev => mergeSteps(prev, status, steps));
+    },
+    onComplete: (data) => {
+      const { status, steps, metrics, report } = data as {
+        status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string;
+      };
+      setDetail(prev => mergeSteps(prev, status, steps, report));
+      if (metrics) setMetrics(prev => prev ? { ...prev, ...metrics } : null);
+    },
+    onError: (message) => setError(message),
+  });
 
   if (isLoading) return <LoadingSpinner message="Loading task detail..." />;
   if (error) return <ErrorMessage message={error} onRetry={() => { setError(null); setRetryCount(c => c + 1); }} />;
@@ -135,6 +140,25 @@ export function TaskDetailPage() {
       )}
     </div>
   );
+}
+
+function mergeSteps(
+  prev: ExecutionDetail | null,
+  status: string,
+  newSteps: StepDetail[],
+  report?: string,
+): ExecutionDetail | null {
+  if (!prev) return prev;
+  const stepsMap = new Map(prev.steps.map(s => [s.id, s]));
+  for (const s of newSteps) {
+    stepsMap.set(s.id, { ...stepsMap.get(s.id), ...s } as StepDetail);
+  }
+  return {
+    ...prev,
+    status,
+    steps: [...stepsMap.values()],
+    ...(report !== undefined ? { report } : {}),
+  };
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {

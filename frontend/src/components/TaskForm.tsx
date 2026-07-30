@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../services/api";
+import { useToast } from "./ToastProvider";
 
 interface TaskFormProps {
   onTaskCreated: (taskId: string) => void;
@@ -11,6 +12,7 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
   const [error, setError] = useState<string | null>(null);
   const charCount = description.length;
   const isValidLength = charCount >= 10;
+  const { addToast } = useToast()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,8 +25,10 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
       const response = await api.executeTask(description);
       onTaskCreated(response.task_id);
       setDescription("");
+      addToast("Task created successfully", "success")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create task");
+      addToast(err instanceof Error ? err.message : "Failed to create task", "error");
     } finally {
       setIsLoading(false);
     }

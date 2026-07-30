@@ -6,6 +6,7 @@ import type { ExecutionDetail, ExecutionMetrics, StepDetail } from "../types/api
 import { ErrorMessage } from "../components/ErrorMessage";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { StatusBadge } from "../components/StatusBadge";
+import { useToast } from "../components/ToastProvider";
 
 export function TaskDetailPage() {
   const { traceId } = useParams<{ traceId: string }>();
@@ -14,6 +15,7 @@ export function TaskDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const { addToast } = useToast();
 
   useEffect(() => {
     if (!traceId) return;
@@ -30,7 +32,9 @@ export function TaskDetailPage() {
         if (!cancelled) setDetail(detailResp.execution);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? `HTTP ${err.statusCode}: ${err.body}` : err instanceof Error ? err.message : "Failed to load task detail");
+          const msg = err instanceof ApiError ? `HTTP ${err.statusCode}: ${err.body}` : err instanceof Error ? err.message : "Failed to load task detail";
+          setError(msg);
+          addToast(msg, "error");
         }
         return;
       } finally {
@@ -42,7 +46,7 @@ export function TaskDetailPage() {
         if (!cancelled) setMetrics(metricsResp.metrics);
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 404) return;
-        if (!cancelled) console.warn("Failed to load metrics:", err);
+        if (!cancelled) addToast("Metrics unavailable", "info");
       }
     }
 
@@ -63,9 +67,21 @@ export function TaskDetailPage() {
         status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string;
       };
       setDetail(prev => mergeSteps(prev, status, steps, report));
-      if (metrics) setMetrics(prev => prev ? { ...prev, ...metrics } : null);
+      if (metrics) {
+        setMetrics(prev => prev ? { ...prev, ...metrics } : null);
+        if (metrics.error_count && metrics.error_count > 0) {
+          addToast(`Task completed with ${metrics.error_count} error(s)`, "error");
+        } else {
+          addToast("Task completed successfully", "success");
+        }
+      } else {
+        addToast("Task completed successfully", "success");
+      }
     },
-    onError: (message) => setError(message),
+    onError: (message) => {
+      setError(message);
+      addToast(message, "error");
+    },
   });
 
   if (isLoading) return <LoadingSpinner message="Loading task detail..." />;
@@ -78,6 +94,12 @@ export function TaskDetailPage() {
 
       <h2>Task Detail</h2>
       <p className="text-muted mb-2">Trace ID: {detail.trace_id}</p>
+
+      {/* <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+        <button onClick={() => addToast("Operación exitosa", "success")}>Toast Success</button>
+        <button onClick={() => addToast("Algo salió mal", "error")}>Toast Error</button>
+        <button onClick={() => addToast("Información útil", "info")}>Toast Info</button>
+      </div> */}
 
       <div className="metric-grid">
         {metrics && (

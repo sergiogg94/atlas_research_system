@@ -6,18 +6,21 @@ import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import './App.css'
 import './styles.css'
+import { ToastProvider } from "./components/ToastProvider";
 
 function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/tasks" element={<TaskListPage />} />
-          <Route path="/tasks/:traceId" element={<TaskDetailPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Layout>
+      <ToastProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/tasks" element={<TaskListPage />} />
+            <Route path="/tasks/:traceId" element={<TaskDetailPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Layout>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

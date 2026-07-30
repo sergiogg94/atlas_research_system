@@ -54,30 +54,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ toasts: state.toasts, addToast, removeToast }}>
       {children}
       {/* Toast container fixed at bottom-right */}
-      <div style={{
-        position: "fixed",
-        bottom: "1rem",
-        right: "1rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.5rem",
-        zIndex: 1000,
-      }}>
+      <div className="toast-container">
         {state.toasts.map((toast) => (
           <div
             key={toast.id}
-            style={{
-              padding: "0.75rem 1rem",
-              borderRadius: "4px",
-              color: "white",
-              background: toast.type === "success" ? "#090"
-                : toast.type === "error" ? "#c00"
-                : "#1a1a2e",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-              animation: "slideIn 0.3s ease-out",
-              cursor: "pointer",
-              minWidth: "250px",
-            }}
+            className={`toast toast--${toast.type}`}
             onClick={() => removeToast(toast.id)}
           >
             {toast.type === "success" && "✓ "}
@@ -86,12 +67,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           </div>
         ))}
       </div>
-      <style>{`
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-      `}</style>
     </ToastContext.Provider>
   );
 }

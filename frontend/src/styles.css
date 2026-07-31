@@ -108,3 +108,131 @@
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* ===== Plan timeline ===== */
+.plan-timeline {
+  margin-bottom: 2rem;
+}
+
+.plan-timeline-objective {
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.plan-timeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.plan-step {
+  display: flex;
+  gap: 1rem;
+  min-height: 60px;
+}
+
+.plan-step-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.plan-step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  background: var(--accent-bg);
+  border: 2px solid var(--border);
+  z-index: 1;
+}
+
+.plan-step--completed .plan-step-icon {
+  background: #065f46;
+  border-color: #059669;
+}
+
+.plan-step--running .plan-step-icon {
+  background: #78350f;
+  border-color: #d97706;
+  animation: pulse 1.5s infinite;
+}
+
+.plan-step--failed .plan-step-icon {
+  background: #7f1d1d;
+  border-color: #dc2626;
+}
+
+.plan-step-line {
+  width: 2px;
+  flex: 1;
+  background: var(--border);
+  min-height: 20px;
+}
+
+.plan-step--completed .plan-step-line {
+  background: #059669;
+}
+
+.plan-step--failed .plan-step-line {
+  background: #dc2626;
+}
+
+.plan-step-content {
+  padding-bottom: 1.5rem;
+  flex: 1;
+}
+
+.plan-step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.plan-step-type {
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-h);
+}
+
+.plan-step-status {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.plan-step-status--completed {
+  background: #065f46;
+  color: #6ee7b7;
+}
+.plan-step-status--running {
+  background: #78350f;
+  color: #fcd34d;
+}
+.plan-step-status--failed {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+.plan-step-status--pending {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.plan-step-description {
+  margin-top: 0.25rem;
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api, API_BASE, ApiError } from "../services/api";
 import { useEventSource } from "../hooks/useEventSource";
-import type { ExecutionDetail, ExecutionMetrics, StepDetail } from "../types/api";
+import type { ExecutionDetail, ExecutionMetrics, Plan, StepDetail } from "../types/api";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { StatusBadge } from "../components/StatusBadge";
+import { PlanTimeLine, type PlanStep as TimelineStep } from "../components/PlanTimeLine";
 import { useToast } from "../components/ToastProvider";
 
 export function TaskDetailPage() {
@@ -59,14 +60,14 @@ export function TaskDetailPage() {
 
   useEventSource(sseUrl, {
     onProgress: (data) => {
-      const { status, steps } = data as { status: string; steps: StepDetail[] };
-      setDetail(prev => mergeSteps(prev, status, steps));
+      const { status, steps, plan } = data as { status: string; steps: StepDetail[]; plan?: Plan | null };
+      setDetail(prev => mergeSteps(prev, status, steps, undefined, plan));
     },
     onComplete: (data) => {
-      const { status, steps, metrics, report } = data as {
-        status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string;
+      const { status, steps, metrics, report, plan } = data as {
+        status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string; plan?: Plan | null;
       };
-      setDetail(prev => mergeSteps(prev, status, steps, report));
+      setDetail(prev => mergeSteps(prev, status, steps, report, plan));
       if (metrics) {
         setMetrics(prev => prev ? { ...prev, ...metrics } : null);
         if (metrics.error_count && metrics.error_count > 0) {
@@ -126,6 +127,15 @@ export function TaskDetailPage() {
         </p>
       </div>
 
+      {detail.plan && (
+        <div className="detail-section">
+          <PlanTimeLine
+            objective={detail.plan.objective}
+            steps={toTimelineSteps(detail)}
+          />
+        </div>
+      )}
+
       <h3>Execution Steps</h3>
       {detail.steps.length === 0 ? (
         <p className="text-muted">No steps recorded.</p>
@@ -169,6 +179,7 @@ function mergeSteps(
   status: string,
   newSteps: StepDetail[],
   report?: string,
+  plan?: Plan | null,
 ): ExecutionDetail | null {
   if (!prev) return prev;
   const stepsMap = new Map(prev.steps.map(s => [s.id, s]));
@@ -180,7 +191,42 @@ function mergeSteps(
     status,
     steps: [...stepsMap.values()],
     ...(report !== undefined ? { report } : {}),
+    ...(plan !== undefined ? { plan } : {}),
   };
+}
+
+const EXEC_TO_PLAN_STEP_TYPE: Record<string, string> = {
+  planning: "scoping",
+  research: "research",
+  data_analysis: "analysis",
+  synthesis: "synthesis",
+};
+
+function toTimelineSteps(detail: ExecutionDetail): TimelineStep[] {
+  if (!detail.plan) return [];
+  const planSteps = [...detail.plan.steps].sort((a, b) => a.step - b.step);
+
+  if (detail.status === "completed") {
+    return planSteps.map(s => ({ type: s.step_type, description: s.action, status: "completed" as const }));
+  }
+
+  // Cada agente registra una fila "running" y luego una fila con estado final
+  // (completed/failed) sin actualizar la primera; los steps llegan ordenados
+  // por created_at, así que el último registro por step_type es la verdad.
+  const lastStatusByPlanType = new Map<string, TimelineStep["status"]>();
+  for (const step of detail.steps) {
+    const planType = step.step_type ? EXEC_TO_PLAN_STEP_TYPE[step.step_type] : undefined;
+    if (!planType) continue;
+    if (step.status === "running" || step.status === "completed" || step.status === "failed") {
+      lastStatusByPlanType.set(planType, step.status);
+    }
+  }
+
+  return planSteps.map(s => ({
+    type: s.step_type,
+    description: s.action,
+    status: lastStatusByPlanType.get(s.step_type) ?? "pending",
+  }));
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {

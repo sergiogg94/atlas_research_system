@@ -1,4 +1,17 @@
 // For backend/app/schemas/orchestrator.py
+export interface PlanStep {
+  step: number;
+  action: string;
+  expected_output: string;
+  step_type: string;
+}
+
+export interface Plan {
+  objective: string;
+  assumptions: string[];
+  steps: PlanStep[];
+}
+
 export interface ExecuteTaskRequest {
   task_description: string;
 }
@@ -8,7 +21,7 @@ export interface ExecuteTaskResponse {
   timestamp: string;
   task_id:  string;
   objective: string;
-  plan: Record<string, unknown> | null;
+  plan: Plan | null;
   research_findings: unknown[] | null;
   data_results: unknown[] | null;
   report: string | null;
@@ -55,6 +68,7 @@ export interface StepDetail {
 }
 
 export interface ExecutionDetail extends ExecutionSummary {
+  plan: Plan | null;
   steps: StepDetail[];
   report: string | null;
 }

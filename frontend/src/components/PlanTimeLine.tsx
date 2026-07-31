@@ -1,4 +1,4 @@
-interface PlanStep {
+export interface PlanStep {
   type: string;
   description: string;
   status: "pending" | "running" | "completed" | "failed";

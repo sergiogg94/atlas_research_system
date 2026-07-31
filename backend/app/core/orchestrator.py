@@ -251,6 +251,7 @@ async def run_planner(state: OrchestratorState) -> OrchestratorState:
             execution_id=execution.id,
             objective=plan.get("objective", ""),
             total_steps=state.get("total_steps", 0),
+            plan=plan,
         )
 
         return state

@@ -78,6 +78,7 @@ async def get_execution(trace_id: str):
             trace_id=execution.trace_id,
             task_description=execution.task_description,
             objective=execution.objective,
+            plan=execution.plan,
             status=execution.status,
             total_steps=execution.total_steps,
             error=execution.error,

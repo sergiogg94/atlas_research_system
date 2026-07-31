@@ -1,11 +1,10 @@
 import asyncio
 import json
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-
 from app.core.llm.base import LLMProvider
 from app.core.tools.base import ToolResult
 
@@ -21,18 +20,20 @@ class FakeLLMProvider(LLMProvider):
         return ["fake-model"]
 
 
-PLAN_JSON = json.dumps({
-    "objective": "Research the impact of AI on healthcare",
-    "assumptions": ["AI adoption varies by region"],
-    "steps": [
-        {
-            "step": 1,
-            "action": "Define scope of AI in healthcare",
-            "expected_output": "Scope definition document",
-            "step_type": "scoping",
-        },
-    ],
-})
+PLAN_JSON = json.dumps(
+    {
+        "objective": "Research the impact of AI on healthcare",
+        "assumptions": ["AI adoption varies by region"],
+        "steps": [
+            {
+                "step": 1,
+                "action": "Define scope of AI in healthcare",
+                "expected_output": "Scope definition document",
+                "step_type": "scoping",
+            },
+        ],
+    }
+)
 
 
 class TestRoot:
@@ -151,7 +152,7 @@ class TestGenerate:
     @pytest.mark.asyncio
     async def test_generate_timeout(self, client):
         provider = AsyncMock(spec=LLMProvider)
-        provider.generate.side_effect = asyncio.TimeoutError()
+        provider.generate.side_effect = TimeoutError()
 
         with patch("app.api.routes.llm.get_llm_provider", return_value=provider):
             response = await client.post(
@@ -178,7 +179,7 @@ class TestListModels:
     @pytest.mark.asyncio
     async def test_list_models_timeout(self, client):
         provider = AsyncMock(spec=LLMProvider)
-        provider.list_models.side_effect = asyncio.TimeoutError()
+        provider.list_models.side_effect = TimeoutError()
 
         with patch("app.api.routes.llm.get_llm_provider", return_value=provider):
             response = await client.get("/api/v1/test/models")
@@ -191,9 +192,7 @@ class TestPlan:
     async def test_create_plan_success(self, client):
         provider = FakeLLMProvider(response=PLAN_JSON)
 
-        with patch(
-            "app.core.agents.planner.get_llm_provider", return_value=provider
-        ):
+        with patch("app.core.agents.planner.get_llm_provider", return_value=provider):
             response = await client.post(
                 "/api/v1/plan",
                 json={"task_description": "Research the impact of AI on healthcare"},
@@ -218,9 +217,7 @@ class TestPlan:
     async def test_create_plan_llm_error(self, client):
         provider = FakeLLMProvider(response="not valid json")
 
-        with patch(
-            "app.core.agents.planner.get_llm_provider", return_value=provider
-        ):
+        with patch("app.core.agents.planner.get_llm_provider", return_value=provider):
             response = await client.post(
                 "/api/v1/plan",
                 json={"task_description": "Research the impact of AI on healthcare"},
@@ -232,9 +229,7 @@ class TestPlan:
 class TestResearch:
     @pytest.mark.asyncio
     async def test_research_success(self, client):
-        provider = FakeLLMProvider(
-            response="AI is transforming healthcare through diagnostics."
-        )
+        provider = FakeLLMProvider(response="AI is transforming healthcare through diagnostics.")
         search_tool = AsyncMock()
         search_tool.execute.return_value = ToolResult(
             success=True,
@@ -264,9 +259,7 @@ class TestResearch:
             raise KeyError(name)
 
         with (
-            patch(
-                "app.core.agents.research.get_llm_provider", return_value=provider
-            ),
+            patch("app.core.agents.research.get_llm_provider", return_value=provider),
             patch(
                 "app.core.agents.research.get_tool",
                 side_effect=get_tool_side_effect,
@@ -308,9 +301,7 @@ class TestResearch:
     async def test_research_search_failure(self, client):
         provider = FakeLLMProvider()
         search_tool = AsyncMock()
-        search_tool.execute.return_value = ToolResult(
-            success=False, error="Search API error"
-        )
+        search_tool.execute.return_value = ToolResult(success=False, error="Search API error")
         scraper_tool = AsyncMock()
 
         def get_tool_side_effect(name):
@@ -321,9 +312,7 @@ class TestResearch:
             raise KeyError(name)
 
         with (
-            patch(
-                "app.core.agents.research.get_llm_provider", return_value=provider
-            ),
+            patch("app.core.agents.research.get_llm_provider", return_value=provider),
             patch(
                 "app.core.agents.research.get_tool",
                 side_effect=get_tool_side_effect,
@@ -347,9 +336,7 @@ class TestResearch:
 
     @pytest.mark.asyncio
     async def test_research_scraper_failure_continues(self, client):
-        provider = FakeLLMProvider(
-            response="AI is transforming healthcare through diagnostics."
-        )
+        provider = FakeLLMProvider(response="AI is transforming healthcare through diagnostics.")
         search_tool = AsyncMock()
         search_tool.execute.return_value = ToolResult(
             success=True,
@@ -362,9 +349,7 @@ class TestResearch:
             ],
         )
         scraper_tool = AsyncMock()
-        scraper_tool.execute.return_value = ToolResult(
-            success=False, error="Timeout scraping URL"
-        )
+        scraper_tool.execute.return_value = ToolResult(success=False, error="Timeout scraping URL")
 
         def get_tool_side_effect(name):
             if name == "web_search":
@@ -374,9 +359,7 @@ class TestResearch:
             raise KeyError(name)
 
         with (
-            patch(
-                "app.core.agents.research.get_llm_provider", return_value=provider
-            ),
+            patch("app.core.agents.research.get_llm_provider", return_value=provider),
             patch(
                 "app.core.agents.research.get_tool",
                 side_effect=get_tool_side_effect,
@@ -435,9 +418,7 @@ class TestHistory:
         mock_repo.list_executions.return_value = ([mock_exec], 1)
 
         with patch("app.api.routes.history.execution_repository", mock_repo):
-            response = await client.get(
-                "/api/v1/tasks?page=1&page_size=10&status=completed"
-            )
+            response = await client.get("/api/v1/tasks?page=1&page_size=10&status=completed")
 
         assert response.status_code == 200
         data = response.json()
@@ -456,6 +437,7 @@ class TestHistory:
         mock_exec.trace_id = "trace-1"
         mock_exec.task_description = "Test task"
         mock_exec.objective = "obj"
+        mock_exec.plan = None
         mock_exec.status = "completed"
         mock_exec.total_steps = 3
         mock_exec.error = None

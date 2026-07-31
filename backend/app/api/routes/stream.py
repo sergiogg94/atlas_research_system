@@ -46,6 +46,7 @@ async def execution_event_generator(trace_id: str):
                     "trace_id": trace_id,
                     "status": status,
                     "total_steps": getattr(execution, "total_steps", 0),
+                    "plan": getattr(execution, "plan", None),
                     "steps": steps_data,
                 }
                 yield {"event": "progress", "data": json.dumps(data)}

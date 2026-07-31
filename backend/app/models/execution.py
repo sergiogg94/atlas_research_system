@@ -30,6 +30,7 @@ class Execution(Base):
     trace_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
     task_description: Mapped[str] = mapped_column(Text, nullable=False)
     objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plan: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[ExecutionStatus] = mapped_column(
         SQLEnum(ExecutionStatus),
         default=ExecutionStatus.PENDING,

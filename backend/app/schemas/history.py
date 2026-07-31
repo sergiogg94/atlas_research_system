@@ -20,6 +20,7 @@ class ExecutionSummary(BaseModel):
 
 
 class ExecutionDetail(ExecutionSummary):
+    plan: dict | None = None
     steps: list["StepDetail"] = []
     llm_calls: list["LLMCallDetail"] = []
     tool_calls: list["ToolCallDetail"] = []

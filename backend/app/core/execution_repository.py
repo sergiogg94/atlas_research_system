@@ -44,6 +44,7 @@ class ExecutionRepository:
         execution_id: uuid.UUID,
         status: ExecutionStatus | None = None,
         objective: str | None = None,
+        plan: dict | None = None,
         total_steps: int | None = None,
         error: str | None = None,
         report: str | None = None,
@@ -59,6 +60,8 @@ class ExecutionRepository:
                 execution.status = status
             if objective is not None:
                 execution.objective = objective
+            if plan is not None:
+                execution.plan = plan
             if total_steps is not None:
                 execution.total_steps = total_steps
             if error is not None:

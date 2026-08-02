@@ -298,3 +298,54 @@ This week delivered the long-awaited React frontend from scratch, connecting the
 4. **Fire-and-forget metrics computation has edge cases** — Calling `compute_and_upsert_metrics` after every failure path revealed UUID conversion and session management issues. The upsert pattern handles concurrent writes gracefully, but logging on failure was essential for debugging.
 5. **Responsive design with CSS custom properties** — A single `:root` block with `@media (max-width: 1024px)` breakpoints for font-size keeps the app readable on mobile without component-level media queries.
 6. **Type-safety across the frontend-backend boundary** — Defining `api.ts` types (ExecuteTaskResponse, ExecutionSummary, ExecutionDetail, ExecutionMetrics) that mirror the backend Pydantic schemas caught field mismatches early. The `resolveTraceId` pattern prevents routing parameter issues.
+
+---
+
+## Week 9: SSE Streaming, Toast Notifications & Plan Timeline (In Progress)
+
+### Summary
+Continued the frontend work with real-time execution progress. I completed through **Day 3** of the plan: the 5s polling on the detail page was replaced by a Server-Sent Events (SSE) stream (`GET /api/v1/tasks/{trace_id}/stream`), a React Context + useReducer toast notification system was added, and a vertical PlanTimeline component now visualizes the execution plan with per-step status. On the backend, the generated plan is now persisted in a JSON column on the `Execution` model (served by both history and stream endpoints), and the Data Agent gained a self-reflection node that analyzes execution errors and produces a fix plan before retrying code generation. Days 4–7 of the plan (TanStack Query, stats dashboard, search/filtering, retry button, performance optimizations) remain pending and will be carried to Week 10.
+
+### Key Deliverables
+- **SSE streaming endpoint** — `sse-starlette>=3.4.6` added; new `backend/app/api/routes/stream.py` with `EventSourceResponse` and an async generator that polls the execution every 1s, emitting a `progress` event (status, steps with ids, plan) only when something changed, a `complete` event with metrics and report on terminal statuses, and `error` events on failures or missing executions
+- **Router registration & fixes** — stream router registered in `main.py`; fixed the `api/v1` prefix missing leading slash and removed `response_model=EventSourceResponse` which broke the route
+- **`useEventSource` hook** — `frontend/src/hooks/useEventSource.ts` wrapping the browser `EventSource` with `progress`/`complete`/`error` listeners, a `completed` flag to suppress reconnection errors, cleanup on unmount, and a `close()` callback
+- **TaskDetailPage streaming refactor** — replaced the 5s polling interval with `useEventSource`; `mergeSteps` merges streamed steps by stable id instead of replacing the whole list; detail loads first, metrics second with 404 tolerated; `API_BASE`/`ApiError` exported from the API service
+- **Toast notifications** — `frontend/src/components/ToastProvider.tsx` with `createContext` + `useReducer` (`addToast`/`removeToast`/`useToast`), auto-dismiss after 4s, slide-in animation; `App.tsx` wrapped with the provider; toasts wired into `TaskForm` (success/error on submit) and `TaskDetailPage` (load errors, metrics unavailable, completion with error count)
+- **Toast CSS refactor** — inline styles moved to `styles.css` as `.toast-container`/`.toast--success|error|info` classes with dark-theme-consistent colors
+- **PlanTimeline component** — `frontend/src/components/PlanTimeLine.tsx` rendering a vertical timeline with per-step-type icons (scoping/research/analysis/synthesis), status-colored markers and labels, connector lines, and a pulse animation for running steps (~128 lines of CSS)
+- **Execution plan persistence** — `plan` JSON column on the `Execution` model; `update_execution` and `run_planner` persist the generated plan; `ExecutionDetail` schema and the SSE payload now include it
+- **Timeline logic in detail page** — `Plan`/`PlanStep` types in `api.ts`; `toTimelineSteps` maps execution steps (per agent: planning/research/data_analysis/synthesis) to plan steps, using the last recorded status per step type as the truth while the execution runs
+- **Data Agent self-reflection on retry** — new `reflect_error` LangGraph node that asks the LLM to diagnose the execution error and emit a concrete fix plan; new versioned prompts (`data_reflect_error_system`/`data_reflect_error_user` v1.0.0); retry edges re-routed from `execute_python`/`execute_sql` → `reflect_error` → `generate_code`; `reflection` field added to `DataState` and to the code-gen prompt
+- **Markdown-safe code generation** — `_strip_markdown_code` helper strips fenced code blocks from LLM output; the code-gen prompt now requests raw code without markdown; `classify_output` parsing also hardened
+- **Robustness & typing fixes** — mypy fixes across route modules (data, history, llm, orchestrator, plan); None-safe integer casts for latency/token/duration fields in history serialization; stream endpoint fetches steps by `execution.id` instead of casting `trace_id`
+- **Docs** — `docs/data_graph.md` updated with the `reflect_error` node, `reflection` state field, and new edges
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| SSE over client polling | The backend pushes events only when state changes (server-side 1s poll with diff detection); the client keeps one persistent HTTP connection instead of firing a request every 5s |
+| Server-Sent Events over WebSocket | Unidirectional progress monitoring does not need a bidirectional channel; SSE is plain HTTP, auto-reconnects, and is dramatically simpler to integrate with FastAPI (`EventSourceResponse`) and the browser (`EventSource`) |
+| Diff-based event emission in the generator | Tracking `last_status`/`last_step_count` and yielding only on change minimizes bandwidth and avoids redundant React re-renders |
+| Merge-by-id on the frontend | Streamed steps carry stable ids and are merged into a `Map`, preserving previously loaded steps and preventing flicker that full-list replacement would cause |
+| `plan` persisted as a JSON column | One source of truth for the generated plan, served by both the history detail endpoint and the SSE stream — no plan regeneration or separate storage |
+| reflect_error as a dedicated graph node | Debugging is separated from generation: the LLM analyzes the error and produces an explicit fix plan that the code-gen prompt consumes on retry, replacing the previous raw-error-only retry with structured self-correction |
+| Prompt-level markdown ban + defensive stripping | Even with the prompt forbidding code fences, LLMs still emit them; stripping markdown blocks defensively makes code execution robust to formatting drift |
+| Toast system with Context + useReducer | Zero-dependency global UI feedback; the provider pattern keeps state management isolated and the `useToast` hook makes it usable anywhere in the tree |
+
+### Pending (carried to Week 10)
+- [ ] TanStack Query (React Query) refactor of `useApi` with caching, retry, and refetch-on-focus
+- [ ] Stats dashboard (`GET /api/v1/stats` endpoint + `DashboardPage` with aggregated metrics)
+- [ ] Search & filtering on `TaskListPage` (debounced `q` parameter, status filter, URL search params)
+- [ ] Retry button for failed tasks (`POST /api/v1/tasks/{trace_id}/retry`)
+- [ ] Performance optimizations (React.lazy + Suspense, useMemo/useCallback)
+- [ ] Responsive design refinements (mobile media queries)
+- [ ] Agent graph visualization (React Flow / D3.js) and LogViewer
+
+### Key Learnings
+1. **SSE is deceptively simple but has sharp edges** — `EventSourceResponse` + a generator with `asyncio.sleep(1)` is a clean push pattern, but `response_model=EventSourceResponse` breaks the route, the prefix needs the leading slash, and `asyncio.CancelledError` must be caught to close connections cleanly on client disconnect.
+2. **Browser EventSource quirks** — It auto-reconnects and fires the `error` listener on every failed attempt, so a `completed` flag is required to avoid spurious error toasts after a normal `complete` event. It also cannot send custom headers, which matters if auth is added later.
+3. **Merge-by-id beats replace** — Streaming steps with stable ids and merging client-side preserves continuity of already-rendered steps and avoids UI flicker; keying the merge on `step.id` (an issue found and fixed during the week) is essential.
+4. **Reflection-driven retry improves self-correction** — Giving the code-gen LLM a prior error diagnosis with a concrete fix plan (the `reflect_error` node) is more effective than feeding the raw error. The prompt still needs to forbid markdown, and the agent must defensively strip fences anyway — LLM output formatting cannot be fully trusted.
+5. **Real data exposes None-safety gaps** — The first streaming runs revealed `None` latency and token fields in history serialization; `int()` casts must be guarded against `None` before they reach the response schema.
+6. **Realistic weekly scope** — Three focused features (streaming, toasts, timeline) plus backend support work is a full week at 1–2h/day. Days 4–7 are substantial enough to warrant their own week rather than a rushed Sunday.

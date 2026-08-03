@@ -1,46 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../services/api";
-import type { ExecutionSummary } from "../types/api";
+import { useTasks } from "../hooks/useTasks";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { StatusBadge } from "../components/StatusBadge";
 
 export function TaskListPage() {
-  const [executions, setExecutions] = useState<ExecutionSummary[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, error, refetch } = useTasks(page);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setIsLoading(true);
-        const response = await api.listTasks(page);
-        if (!cancelled) {
-          setExecutions(response.executions);
-          setTotal(response.total);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load tasks");
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    load();
-    return () => { cancelled = true; }; // Avoid calling setState if the component has unmounted
-  }, [page]);
-
+  const executions = data?.executions ?? [];
+  const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / 20);
 
   if (isLoading) return <LoadingSpinner message="Loading tasks..." />;
-  if (error) return <ErrorMessage message={error} onRetry={() => { setError(null); setPage(1); }} />;
+  if (error) return <ErrorMessage message={error.message} onRetry={refetch} />;
 
   return (
     <div>

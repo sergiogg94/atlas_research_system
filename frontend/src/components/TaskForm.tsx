@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../services/api";
+import { useExecuteTask } from "../hooks/useTasks";
 import { useToast } from "./ToastProvider";
 
 interface TaskFormProps {
@@ -8,30 +8,25 @@ interface TaskFormProps {
 
 export function TaskForm({ onTaskCreated }: TaskFormProps) {
   const [description, setDescription] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const charCount = description.length;
   const isValidLength = charCount >= 10;
   const { addToast } = useToast()
+  const { mutate, isPending, error } = useExecuteTask();
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidLength) return;
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await api.executeTask(description);
-      onTaskCreated(response.task_id);
-      setDescription("");
-      addToast("Task created successfully", "success")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create task");
-      addToast(err instanceof Error ? err.message : "Failed to create task", "error");
-    } finally {
-      setIsLoading(false);
-    }
+    mutate(description, {
+      onSuccess: (response) => {
+        onTaskCreated(response.task_id);
+        setDescription("");
+        addToast("Task created successfully", "success");
+      },
+      onError: (err) => {
+        addToast(err instanceof Error ? err.message : "Failed to create task", "error");
+      },
+    });
   }
 
   return (
@@ -55,15 +50,15 @@ export function TaskForm({ onTaskCreated }: TaskFormProps) {
 
       <button
         type="submit"
-        disabled={isLoading || !isValidLength}
+        disabled={isPending || !isValidLength}
         className="btn"
       >
-        {isLoading ? "Executing..." : "Execute Task"}
+        {isPending ? "Executing..." : "Execute Task"}
       </button>
 
       {error && (
         <div className="error-box" style={{ marginTop: "1rem" }}>
-          Error: {error}
+          Error: {error instanceof Error ? error.message : "Failed to create task"}
         </div>
       )}
     </form>

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api, API_BASE, ApiError } from "../services/api";
+import { API_BASE } from "../services/api";
 import { useEventSource } from "../hooks/useEventSource";
+import { useTaskDetail, useTaskMetrics } from "../hooks/useTasks";
 import type { ExecutionDetail, ExecutionMetrics, Plan, StepDetail } from "../types/api";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { LoadingSpinner } from "../components/LoadingSpinner";
@@ -11,49 +12,16 @@ import { useToast } from "../components/ToastProvider";
 
 export function TaskDetailPage() {
   const { traceId } = useParams<{ traceId: string }>();
-  const [detail, setDetail] = useState<ExecutionDetail | null>(null);
-  const [metrics, setMetrics] = useState<ExecutionMetrics | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+  const [liveDetail, setLiveDetail] = useState<ExecutionDetail | null>(null);
+  const [liveMetrics, setLiveMetrics] = useState<ExecutionMetrics | null>(null);
+  const [sseError, setSseError] = useState<string | null>(null);
   const { addToast } = useToast();
 
-  useEffect(() => {
-    if (!traceId) return;
+  const { data: detailData, isLoading, error: queryError, refetch } = useTaskDetail(traceId);
+  const { data: metricsData } = useTaskMetrics(traceId);
 
-    const resolvedTraceId = traceId;
-    let cancelled = false;
-
-    async function load() {
-      type TaskDetailResponse = { execution: ExecutionDetail };
-
-      try {
-        setIsLoading(true);
-        const detailResp = await (api.getTaskDetail(resolvedTraceId) as Promise<TaskDetailResponse>);
-        if (!cancelled) setDetail(detailResp.execution);
-      } catch (err) {
-        if (!cancelled) {
-          const msg = err instanceof ApiError ? `HTTP ${err.statusCode}: ${err.body}` : err instanceof Error ? err.message : "Failed to load task detail";
-          setError(msg);
-          addToast(msg, "error");
-        }
-        return;
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-
-      try {
-        const metricsResp = await api.getTaskMetrics(resolvedTraceId) as { metrics: ExecutionMetrics };
-        if (!cancelled) setMetrics(metricsResp.metrics);
-      } catch (err) {
-        if (err instanceof ApiError && err.statusCode === 404) return;
-        if (!cancelled) addToast("Metrics unavailable", "info");
-      }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, [traceId, retryCount]);
+  const detail = liveDetail ?? detailData?.execution ?? null;
+  const metrics = liveMetrics ?? metricsData?.metrics ?? null;
 
   const isActive = detail?.status === "running" || detail?.status === "pending";
   const sseUrl = traceId && isActive ? `${API_BASE}/tasks/${traceId}/stream` : null;
@@ -61,15 +29,15 @@ export function TaskDetailPage() {
   useEventSource(sseUrl, {
     onProgress: (data) => {
       const { status, steps, plan } = data as { status: string; steps: StepDetail[]; plan?: Plan | null };
-      setDetail(prev => mergeSteps(prev, status, steps, undefined, plan));
+      setLiveDetail(prev => mergeSteps(prev, status, steps, undefined, plan));
     },
     onComplete: (data) => {
       const { status, steps, metrics, report, plan } = data as {
         status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string; plan?: Plan | null;
       };
-      setDetail(prev => mergeSteps(prev, status, steps, report, plan));
+      setLiveDetail(prev => mergeSteps(prev, status, steps, report, plan));
       if (metrics) {
-        setMetrics(prev => prev ? { ...prev, ...metrics } : null);
+        setLiveMetrics(prev => (prev ? { ...prev, ...metrics } : { ...metrics } as ExecutionMetrics));
         if (metrics.error_count && metrics.error_count > 0) {
           addToast(`Task completed with ${metrics.error_count} error(s)`, "error");
         } else {
@@ -80,13 +48,14 @@ export function TaskDetailPage() {
       }
     },
     onError: (message) => {
-      setError(message);
+      setSseError(message);
       addToast(message, "error");
     },
   });
 
   if (isLoading) return <LoadingSpinner message="Loading task detail..." />;
-  if (error) return <ErrorMessage message={error} onRetry={() => { setError(null); setRetryCount(c => c + 1); }} />;
+  if (sseError) return <ErrorMessage message={sseError} onRetry={() => { setSseError(null); refetch(); }} />;
+  if (queryError) return <ErrorMessage message={queryError.message} onRetry={refetch} />;
   if (!detail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
 
   return (

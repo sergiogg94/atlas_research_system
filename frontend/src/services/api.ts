@@ -1,4 +1,9 @@
-import type { ExecuteTaskResponse, ExecutionListResponse } from "../types/api";
+import type {
+  ExecuteTaskResponse,
+  ExecutionDetailResponse,
+  ExecutionListResponse,
+  ExecutionMetricsResponse,
+} from "../types/api";
 
 export const API_BASE = "http://localhost:8000/api/v1";
 
@@ -57,20 +62,22 @@ export const api = {
   },
 
   /** List history of executions */
-  async listTasks(page = 1, pageSize = 20) {
-    const response = await fetch(`${API_BASE}/tasks?page=${page}&page_size=${pageSize}`);
+  async listTasks(page = 1, pageSize = 20, status?: string) {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) params.set("status", status);
+    const response = await fetch(`${API_BASE}/tasks?${params}`);
     return handleResponse<ExecutionListResponse>(response);
   },
 
   /** Get execution details by trace_id */
   async getTaskDetail(traceId: string) {
     const response = await fetch(`${API_BASE}/tasks/${traceId}`);
-    return handleResponse(response);
+    return handleResponse<ExecutionDetailResponse>(response);
   },
 
   /** Obtain metrics from an execution */
   async getTaskMetrics(traceId: string) {
     const response = await fetch(`${API_BASE}/tasks/${traceId}/metrics`);
-    return handleResponse(response);
+    return handleResponse<ExecutionMetricsResponse>(response);
   },
 };

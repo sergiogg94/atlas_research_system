@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -252,6 +253,69 @@ class ExecutionRepository:
                 select(ExecutionMetricsCache).where(ExecutionMetricsCache.trace_id == trace_id)
             )
             return result.scalar_one_or_none()
+
+    async def get_stats(self) -> dict[str, Any]:
+        async with SessionLocal() as session:
+            total = await session.scalar(select(func.count(Execution.id))) or 0
+            completed = (
+                await session.scalar(
+                    select(func.count(Execution.id)).where(
+                        Execution.status == ExecutionStatus.COMPLETED
+                    )
+                )
+                or 0
+            )
+            failed = (
+                await session.scalar(
+                    select(func.count(Execution.id)).where(
+                        Execution.status == ExecutionStatus.FAILED
+                    )
+                )
+                or 0
+            )
+            timeout = (
+                await session.scalar(
+                    select(func.count(Execution.id)).where(
+                        Execution.status == ExecutionStatus.TIMEOUT
+                    )
+                )
+                or 0
+            )
+
+            avg_duration = await session.scalar(
+                select(
+                    func.avg(
+                        func.extract("epoch", Execution.completed_at - Execution.started_at) * 1000
+                    )
+                ).where(
+                    Execution.status == ExecutionStatus.COMPLETED,
+                    Execution.started_at.isnot(None),
+                    Execution.completed_at.isnot(None),
+                )
+            )
+
+            recent_result = await session.execute(
+                select(Execution).order_by(desc(Execution.created_at)).limit(5)
+            )
+            recent = recent_result.scalars().all()
+
+            return {
+                "total": total,
+                "completed": completed,
+                "failed": failed,
+                "timeout": timeout,
+                "avg_duration_ms": round(avg_duration) if avg_duration else 0,
+                "success_rate": round((completed / total * 100), 1) if total > 0 else 0,
+                "recent_executions": [
+                    {
+                        "trace_id": e.trace_id,
+                        "task_description": e.task_description[:100],
+                        "status": e.status.value,
+                        "created_at": e.created_at,
+                    }
+                    for e in recent
+                ],
+            }
 
 
 execution_repository = ExecutionRepository()

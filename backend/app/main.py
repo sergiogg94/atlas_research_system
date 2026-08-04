@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import data, health, history, llm, orchestrator, plan, research, stream
+from app.api.routes import data, health, history, llm, orchestrator, plan, research, stats, stream
 from app.core.logging import logger
 from app.core.middleware import TraceIDMiddleware
 
@@ -35,10 +35,11 @@ app.include_router(data.router, prefix="/api/v1", tags=["data"])
 app.include_router(orchestrator.router, prefix="/api/v1", tags=["orchestrator"])
 app.include_router(history.router, prefix="/api/v1", tags=["history"])
 app.include_router(stream.router, prefix="/api/v1", tags=["stream"])
+app.include_router(stats.router, prefix="/api/v1", tags=["stats"])
 
 logger.info(
     "Routers registered: /api/v1/health, /api/v1/llm, /api/v1/plan, /api/v1/data,"
-    + " /api/v1/orchestrator, /api/v1/history, /api/v1/stream"
+    + " /api/v1/orchestrator, /api/v1/history, /api/v1/stream, /api/v1/stats"
 )
 
 

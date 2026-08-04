@@ -27,9 +27,10 @@ async def list_executions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: str = Query(None, pattern="^(pending|running|completed|failed|timeout)$"),
+    q: str | None = Query(None, max_length=200),
 ):
     executions, total = await execution_repository.list_executions(
-        page=page, page_size=page_size, status=status
+        page=page, page_size=page_size, status=status, search_query=q
     )
 
     return ExecutionListResponse(

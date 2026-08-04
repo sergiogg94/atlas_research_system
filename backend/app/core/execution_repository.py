@@ -120,10 +120,18 @@ class ExecutionRepository:
             return await session.get(Execution, execution_id)
 
     async def list_executions(
-        self, page: int = 1, page_size: int = 20, status: str | None = None
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        status: str | None = None,
+        search_query: str | None = None,
     ) -> tuple[list[Execution], int]:
         async with SessionLocal() as session:
             query = select(Execution)
+
+            if search_query:
+                query = query.where(Execution.task_description.like(f"%{search_query}%"))
+
             if status:
                 query = query.where(Execution.status == status)
             query = query.order_by(desc(Execution.created_at))

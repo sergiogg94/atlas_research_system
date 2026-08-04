@@ -13,6 +13,7 @@ export function Layout({ children }: LayoutProps) {
           <h1 className="layout-title">Atlas Research System</h1>
           <Link to="/" className="layout-nav-link">Home</Link>
           <Link to="/tasks" className="layout-nav-link">History</Link>
+          <Link to="/dashboard" className='layout-nav-link'>Dashboard</Link>
         </nav>
       </header>
       <main className="layout-main">

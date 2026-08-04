@@ -63,9 +63,10 @@ export const api = {
   },
 
   /** List history of executions */
-  async listTasks(page = 1, pageSize = 20, status?: string) {
+  async listTasks(page = 1, pageSize = 20, status?: string, q?: string) {
     const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     if (status) params.set("status", status);
+    if (q) params.set("q", q);
     const response = await fetch(`${API_BASE}/tasks?${params}`);
     return handleResponse<ExecutionListResponse>(response);
   },

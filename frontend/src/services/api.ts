@@ -3,6 +3,7 @@ import type {
   ExecutionDetailResponse,
   ExecutionListResponse,
   ExecutionMetricsResponse,
+  StatsResponse,
 } from "../types/api";
 
 export const API_BASE = "http://localhost:8000/api/v1";
@@ -80,4 +81,10 @@ export const api = {
     const response = await fetch(`${API_BASE}/tasks/${traceId}/metrics`);
     return handleResponse<ExecutionMetricsResponse>(response);
   },
+
+  /** Obtain execution stats */
+  async getStats() {
+    const response = await fetch(`${API_BASE}/stats`)
+    return handleResponse<StatsResponse>(response);
+  }
 };

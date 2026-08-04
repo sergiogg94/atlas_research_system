@@ -99,3 +99,25 @@ export interface ExecutionMetricsResponse {
   timestamp: string;
   metrics: ExecutionMetrics;
 }
+
+// For statistics
+export interface ExecutionStats {
+  total: number;
+  completed: number;
+  failed: number;
+  timeout: number;
+  avg_duration_ms: number;
+  success_rate: number;
+  recent_executions: Array<{
+    trace_id: string;
+    task_description: string;
+    status: string;
+    created_at: string;
+  }>;
+}
+
+export interface StatsResponse {
+  status: string;
+  timestamp: string;
+  stats: ExecutionStats;
+}

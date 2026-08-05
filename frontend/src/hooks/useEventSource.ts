@@ -56,7 +56,7 @@ export function useEventSource(
     return () => {
       es.close();
     };
-  }, [url, enabled]);
+  }, [url, enabled, onProgress, onComplete, onError]);
 
   return { close };
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, type ReactNode } from "react";
+import { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
 
 type ToastType = "success" | "error" | "info";
 
@@ -40,15 +40,15 @@ let toastCounter = 0;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(toastReducer, { toasts: [] });
 
-  function addToast(message: string, type: ToastType = "info") {
+  const addToast = useCallback(function addToast(message: string, type: ToastType = "info") {
     const id = `toast-${++toastCounter}`;
     dispatch({ type: "ADD", toast: { id, message, type } });
     setTimeout(() => dispatch({ type: "REMOVE", id }), 4000);
-  }
+  }, []);
 
-  function removeToast(id: string) {
+  const removeToast = useCallback(function removeToast(id: string) {
     dispatch({ type: "REMOVE", id });
-  }
+  }, []);
 
   return (
     <ToastContext.Provider value={{ toasts: state.toasts, addToast, removeToast }}>

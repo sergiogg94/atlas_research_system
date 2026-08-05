@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { api, API_BASE } from "../services/api";
@@ -22,43 +22,66 @@ export default function TaskDetailPage() {
   const { data: detailData, isLoading, error: queryError, refetch } = useTaskDetail(traceId);
   const { data: metricsData } = useTaskMetrics(traceId);
 
-  const detail = liveDetail ?? detailData?.execution ?? null;
+  const detail = useMemo(() => detailData?.execution ?? null, [detailData]);
+  const activeDetail = useMemo(() => liveDetail ?? detail, [liveDetail, detail]);
   const metrics = liveMetrics ?? metricsData?.metrics ?? null;
 
-  const isActive = detail?.status === "running" || detail?.status === "pending";
+  const isActive = activeDetail?.status === "running" || activeDetail?.status === "pending";
   const sseUrl = traceId && isActive ? `${API_BASE}/tasks/${traceId}/stream` : null;
 
-  useEventSource(sseUrl, {
-    onProgress: (data) => {
-      const { status, steps, plan } = data as { status: string; steps: StepDetail[]; plan?: Plan | null };
-      setLiveDetail(prev => mergeSteps(prev, status, steps, undefined, plan));
-    },
-    onComplete: (data) => {
-      const { status, steps, metrics, report, plan } = data as {
-        status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string; plan?: Plan | null;
-      };
-      setLiveDetail(prev => mergeSteps(prev, status, steps, report, plan));
-      if (metrics) {
-        setLiveMetrics(prev => (prev ? { ...prev, ...metrics } : { ...metrics } as ExecutionMetrics));
-        if (metrics.error_count && metrics.error_count > 0) {
-          addToast(`Task completed with ${metrics.error_count} error(s)`, "error");
-        } else {
-          addToast("Task completed successfully", "success");
-        }
+  const handleProgress = useCallback((data: unknown) => {
+    const { status, steps, plan } = data as { status: string; steps: StepDetail[]; plan?: Plan | null };
+    setLiveDetail(prev => mergeSteps(prev, status, steps, undefined, plan));
+  }, []);
+
+  const handleComplete = useCallback((data: unknown) => {
+    const { status, steps, metrics, report, plan } = data as {
+      status: string; steps: StepDetail[]; metrics?: Partial<ExecutionMetrics>; report?: string; plan?: Plan | null;
+    };
+    setLiveDetail(prev => mergeSteps(prev, status, steps, report, plan));
+    if (metrics) {
+      setLiveMetrics(prev => (prev ? { ...prev, ...metrics } : { ...metrics } as ExecutionMetrics));
+      if (metrics.error_count && metrics.error_count > 0) {
+        addToast(`Task completed with ${metrics.error_count} error(s)`, "error");
       } else {
         addToast("Task completed successfully", "success");
       }
-    },
-    onError: (message) => {
-      setSseError(message);
-      addToast(message, "error");
-    },
+    } else {
+      addToast("Task completed successfully", "success");
+    }
+  }, [addToast]);
+
+  const handleError = useCallback((message: string) => {
+    setSseError(message);
+    addToast(message, "error");
+  }, [addToast]);
+
+  useEventSource(sseUrl, {
+    onProgress: handleProgress,
+    onComplete: handleComplete,
+    onError: handleError,
   });
+
+  const planSteps = useMemo<TimelineStep[]>(() => {
+    if (!detail?.plan?.steps) return [];
+    return detail.plan.steps.map((step, i) => {
+      const execStep = activeDetail?.steps?.[i];
+      const status = execStep?.status === "completed" ? "completed"
+        : execStep?.status === "failed" ? "failed"
+        : execStep?.status === "running" ? "running"
+        : "pending";
+      return {
+        type: step.step_type || "research",
+        description: step.action || "",
+        status,
+      } as TimelineStep;
+    });
+  }, [detail?.plan, activeDetail?.steps]);
 
   if (isLoading) return <LoadingSpinner message="Loading task detail..." />;
   if (sseError) return <ErrorMessage message={sseError} onRetry={() => { setSseError(null); refetch(); }} />;
   if (queryError) return <ErrorMessage message={queryError.message} onRetry={refetch} />;
-  if (!detail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
+  if (!activeDetail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
 
   const retryMutation = useMutation({
     mutationFn: () => api.retryTask(traceId!),
@@ -76,7 +99,7 @@ export default function TaskDetailPage() {
       <Link to="/tasks" className="mb-1 inline-block">&larr; Back to History</Link>
 
       <h2>Task Detail</h2>
-      <p className="text-muted mb-2">Trace ID: {detail.trace_id}</p>
+      <p className="text-muted mb-2">Trace ID: {activeDetail.trace_id}</p>
 
       {/* <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
         <button onClick={() => addToast("Operación exitosa", "success")}>Toast Success</button>
@@ -99,10 +122,10 @@ export default function TaskDetailPage() {
 
       <div className="detail-section">
         <strong>Status: </strong>
-        <StatusBadge status={detail.status} />
+        <StatusBadge status={activeDetail.status} />
       </div>
 
-      {detail.status == "failed" && (
+      {activeDetail.status == "failed" && (
         <button
           onClick={() => retryMutation.mutate()}
           disabled={retryMutation.isPending}
@@ -116,25 +139,25 @@ export default function TaskDetailPage() {
       <div className="detail-section">
         <strong>Task Description:</strong>
         <p className="detail-description">
-          {detail.task_description}
+          {activeDetail.task_description}
         </p>
       </div>
 
-      {detail.plan && (
+      {activeDetail.plan && (
         <div className="detail-section">
           <PlanTimeLine
-            objective={detail.plan.objective}
-            steps={toTimelineSteps(detail)}
+            objective={activeDetail.plan.objective}
+            steps={planSteps}
           />
         </div>
       )}
 
       <h3>Execution Steps</h3>
-      {detail.steps.length === 0 ? (
+      {activeDetail.steps.length === 0 ? (
         <p className="text-muted">No steps recorded.</p>
       ) : (
         <div className="steps-list">
-          {detail.steps.map((step) => {
+          {activeDetail.steps.map((step) => {
             const statusClass = step.status === "completed" ? "step-card--completed" : step.status === "failed" ? "step-card--failed" : "step-card--default";
             return (
               <div key={step.id} className={`step-card ${statusClass}`}>
@@ -155,11 +178,11 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      {detail.report && (
+      {activeDetail.report && (
         <div className="mt-2">
           <h3>Generated Report</h3>
           <div className="report-box">
-            {detail.report}
+            {activeDetail.report}
           </div>
         </div>
       )}
@@ -186,40 +209,6 @@ function mergeSteps(
     ...(report !== undefined ? { report } : {}),
     ...(plan !== undefined ? { plan } : {}),
   };
-}
-
-const EXEC_TO_PLAN_STEP_TYPE: Record<string, string> = {
-  planning: "scoping",
-  research: "research",
-  data_analysis: "analysis",
-  synthesis: "synthesis",
-};
-
-function toTimelineSteps(detail: ExecutionDetail): TimelineStep[] {
-  if (!detail.plan) return [];
-  const planSteps = [...detail.plan.steps].sort((a, b) => a.step - b.step);
-
-  if (detail.status === "completed") {
-    return planSteps.map(s => ({ type: s.step_type, description: s.action, status: "completed" as const }));
-  }
-
-  // Cada agente registra una fila "running" y luego una fila con estado final
-  // (completed/failed) sin actualizar la primera; los steps llegan ordenados
-  // por created_at, así que el último registro por step_type es la verdad.
-  const lastStatusByPlanType = new Map<string, TimelineStep["status"]>();
-  for (const step of detail.steps) {
-    const planType = step.step_type ? EXEC_TO_PLAN_STEP_TYPE[step.step_type] : undefined;
-    if (!planType) continue;
-    if (step.status === "running" || step.status === "completed" || step.status === "failed") {
-      lastStatusByPlanType.set(planType, step.status);
-    }
-  }
-
-  return planSteps.map(s => ({
-    type: s.step_type,
-    description: s.action,
-    status: lastStatusByPlanType.get(s.step_type) ?? "pending",
-  }));
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {

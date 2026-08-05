@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { API_BASE } from "../services/api";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { api, API_BASE } from "../services/api";
 import { useEventSource } from "../hooks/useEventSource";
 import { useTaskDetail, useTaskMetrics } from "../hooks/useTasks";
 import type { ExecutionDetail, ExecutionMetrics, Plan, StepDetail } from "../types/api";
@@ -12,6 +13,7 @@ import { useToast } from "../components/ToastProvider";
 
 export function TaskDetailPage() {
   const { traceId } = useParams<{ traceId: string }>();
+  const navigate = useNavigate();
   const [liveDetail, setLiveDetail] = useState<ExecutionDetail | null>(null);
   const [liveMetrics, setLiveMetrics] = useState<ExecutionMetrics | null>(null);
   const [sseError, setSseError] = useState<string | null>(null);
@@ -58,6 +60,17 @@ export function TaskDetailPage() {
   if (queryError) return <ErrorMessage message={queryError.message} onRetry={refetch} />;
   if (!detail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
 
+  const retryMutation = useMutation({
+    mutationFn: () => api.retryTask(traceId!),
+    onSuccess: (data) => {
+      addToast("Task re-execution started", "success");
+      navigate(`/tasks/${data.task_id}`);
+    },
+    onError: (err) => {
+      addToast(err instanceof Error ? err.message : "Retry failed", "error");
+    },
+  });
+
   return (
     <div>
       <Link to="/tasks" className="mb-1 inline-block">&larr; Back to History</Link>
@@ -88,6 +101,17 @@ export function TaskDetailPage() {
         <strong>Status: </strong>
         <StatusBadge status={detail.status} />
       </div>
+
+      {detail.status == "failed" && (
+        <button
+          onClick={() => retryMutation.mutate()}
+          disabled={retryMutation.isPending}
+          className="btn"
+          style={{ marginLeft: "1rem" }}
+        >
+          {retryMutation.isPending ? "Retrying..." : "Retry Task"}
+        </button>
+      )}
 
       <div className="detail-section">
         <strong>Task Description:</strong>

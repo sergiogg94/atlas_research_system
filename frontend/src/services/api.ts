@@ -87,5 +87,11 @@ export const api = {
   async getStats() {
     const response = await fetch(`${API_BASE}/stats`)
     return handleResponse<StatsResponse>(response);
+  },
+
+  /** Retry a failed execution */
+  async retryTask(traceId: string) {
+    const response = await fetch(`${API_BASE}/task/${traceId}/retry`);
+    return handleResponse<ExecuteTaskResponse>(response);
   }
 };

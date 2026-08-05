@@ -6,7 +6,7 @@ import { LoadingSpinner } from "../components/LoadingSpinner";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
 
-export function DashboardPage() {
+export default function DashboardPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["stats"],
     queryFn: () => api.getStats() as Promise<{ stats: ExecutionStats }>,

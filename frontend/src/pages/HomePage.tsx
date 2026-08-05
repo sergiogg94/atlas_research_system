@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { TaskForm } from "../components/TaskForm";
 
-export function HomePage() {
+export default function HomePage() {
   const navigate = useNavigate();
 
   function handleTaskCreated(taskId: string) {

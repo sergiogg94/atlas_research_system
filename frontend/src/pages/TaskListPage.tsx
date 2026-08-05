@@ -7,7 +7,7 @@ import { LoadingSpinner } from "../components/LoadingSpinner";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
 
-export function TaskListPage() {
+export default function TaskListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const statusFilter = searchParams.get("status") || "";

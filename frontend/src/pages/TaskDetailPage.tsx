@@ -11,7 +11,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PlanTimeLine, type PlanStep as TimelineStep } from "../components/PlanTimeLine";
 import { useToast } from "../components/ToastProvider";
 
-export function TaskDetailPage() {
+export default function TaskDetailPage() {
   const { traceId } = useParams<{ traceId: string }>();
   const navigate = useNavigate();
   const [liveDetail, setLiveDetail] = useState<ExecutionDetail | null>(null);

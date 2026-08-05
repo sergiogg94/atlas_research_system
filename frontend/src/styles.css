@@ -236,3 +236,11 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ===== Responsive design ===== */
+@media (max-width: 768px) {
+  .layout-main { padding: 1rem; }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+  .table-wrapper { overflow-x: auto; }
+  .layout-title { display: none; }
+}

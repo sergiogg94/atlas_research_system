@@ -62,6 +62,17 @@ export default function TaskDetailPage() {
     onError: handleError,
   });
 
+  const retryMutation = useMutation({
+    mutationFn: () => api.retryTask(traceId!),
+    onSuccess: (data) => {
+      addToast("Task re-execution started", "success");
+      navigate(`/tasks/${data.task_id}`);
+    },
+    onError: (err) => {
+      addToast(err instanceof Error ? err.message : "Retry failed", "error");
+    },
+  });
+
   const planSteps = useMemo<TimelineStep[]>(() => {
     if (!detail?.plan?.steps) return [];
     return detail.plan.steps.map((step, i) => {
@@ -82,17 +93,6 @@ export default function TaskDetailPage() {
   if (sseError) return <ErrorMessage message={sseError} onRetry={() => { setSseError(null); refetch(); }} />;
   if (queryError) return <ErrorMessage message={queryError.message} onRetry={refetch} />;
   if (!activeDetail) return <div style={{ padding: "1rem" }}>Task not found.</div>;
-
-  const retryMutation = useMutation({
-    mutationFn: () => api.retryTask(traceId!),
-    onSuccess: (data) => {
-      addToast("Task re-execution started", "success");
-      navigate(`/tasks/${data.task_id}`);
-    },
-    onError: (err) => {
-      addToast(err instanceof Error ? err.message : "Retry failed", "error");
-    },
-  });
 
   return (
     <div>

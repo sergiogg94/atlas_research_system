@@ -1,6 +1,6 @@
 # Atlas Research System — Agent Guide
 
-This is a learning project to build a research multi-agent system in Python. The backend is a FastAPI app with async SQLAlchemy and Redis, designed to manage agents, tasks, and results. The frontend is planned as a React app but not implemented yet.
+This is a learning project to build a research multi-agent system in Python. The backend is a FastAPI app with async SQLAlchemy and Redis that orchestrates LangGraph agent graphs (planner, research, data, synthesis) to execute research tasks from end to end. The frontend is a React 19 + Vite app (in `frontend/`) that creates tasks and shows live progress via SSE.
 
 ## Package management
 
@@ -44,17 +44,17 @@ Copy `.env.example` to `.env` at project root. Required vars:
 - **Entrypoint**: `backend/app/main.py` — FastAPI app with CORS, version `0.1.0`.
 - **Config**: `backend/app/config.py` — Pydantic `BaseSettings`, reads `.env` via `lru_cache`.
 - **Database**: `backend/app/core/database.py` — async SQLAlchemy engine, `declarative_base`, `async_sessionmaker`.
-- **Models**: `backend/app/models/` — SQLAlchemy ORM models (e.g. `Task` with UUID PK, status enum).
-- **Schemas**: `backend/app/schemas/` — Pydantic request/response models.
-- **API routes**: `backend/app/api/routes/` — FastAPI `APIRouter` modules (currently only `health`).
-- **Core services**: `backend/app/core/` — database, logging (colorlog-based structured logs).
-- **No frontend yet** — planned React app (architecture doc in `docs/arqutecture.md`).
-- **No tests, no linter, no type checker configured** — these must be added before running anything in that category.
+- **Models**: `backend/app/models/` — SQLAlchemy ORM models (`execution.py`: `Execution`, `ExecutionStep`, `ExecutionMetricsCache`, `LLMCall`, `ToolCallRecord`; `task.py`: `Task`).
+- **Schemas**: `backend/app/schemas/` — Pydantic request/response models (one per domain: plan, research, data, orchestrator, history, stats, llm).
+- **API routes**: `backend/app/api/routes/` — FastAPI `APIRouter` modules (health, llm, plan, research, data, orchestrator, history, stream, stats, retry), all under `/api/v1`.
+- **Core services**: `backend/app/core/` — database, logging (colorlog-based structured logs), redis_client, state_manager, execution_repository, orchestrator (LangGraph), agents, tools, llm providers, tracing, middleware.
+- **Frontend**: `frontend/` — React 19 + Vite + TanStack Query + react-router; SSE via `EventSource` for live execution progress (architecture doc in `docs/ARCHITECTURE.md`).
+- **Tooling**: pytest + pytest-asyncio (backend tests in `backend/tests/`), ruff + mypy + pre-commit; frontend uses oxlint + vitest.
 
 ## Docker
 
 - **Dockerfile**: `backend/Dockerfile` (python:3.13-slim, copies `requirements.txt` then `./backend/app`).
-- **docker-compose.yml** at root: backend + postgres:15-alpine + redis:7-alpine.
+- **docker-compose.yml** at root: backend + postgres:15-alpine + redis:7-alpine + frontend (nginx on :8080).
 
 ## Initializing the database
 
@@ -66,5 +66,5 @@ Creates all tables via SQLAlchemy metadata.
 ## Known quirks
 
 - `.env` is loaded by `pydantic-settings` from `Path(__file__).parent.parent.parent / ".env"` i.e. project root. If running uvicorn from a different directory, the env file won't be found.
-- Database health check in the `/health` endpoint is stubbed (`"no_checked"`).
-- Agent orchestration (LangGraph), LLM providers (Ollama), and tools (web search, Python executor) are all planned but not yet implemented.
+- `/health` probes Redis (`ping`) and Postgres (`SELECT 1`) with a 2s socket timeout.
+- Checkpoints are written to Redis (`orchestrator:{id}`) but resume-from-checkpoint is not implemented.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
 import { LoadingSpinner } from "../components/LoadingSpinner";
@@ -33,9 +33,10 @@ export default function TaskListPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput, setSearchParams]);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["tasks", page, statusFilter, searchQuery],
     queryFn: () => api.listTasks(page, 20, statusFilter, searchQuery),
+    placeholderData: keepPreviousData,
   });
 
   const executions = data?.executions ?? [];
@@ -51,8 +52,7 @@ export default function TaskListPage() {
     });
   };
 
-  if (isLoading) return <LoadingSpinner message="Loading tasks..." />;
-  if (error) return <ErrorMessage message={error.message} onRetry={refetch} />;
+  if (isLoading && !data) return <LoadingSpinner message="Loading tasks..." />;
 
   return (
     <div>
@@ -67,7 +67,11 @@ export default function TaskListPage() {
         className="form-control mb-3"
       />
 
-      {executions.length === 0 ? (
+      {isFetching && <p className="text-muted mt-1">Searching...</p>}
+
+      {error ? (
+        <ErrorMessage message={error.message} onRetry={refetch} />
+      ) : executions.length === 0 ? (
         <p className="mt-2 text-muted">No executions yet. Create one from the home page.</p>
       ) : (
         <table className="table">

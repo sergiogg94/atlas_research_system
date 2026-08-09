@@ -349,3 +349,45 @@ Continued the frontend work with real-time execution progress. I completed throu
 4. **Reflection-driven retry improves self-correction** — Giving the code-gen LLM a prior error diagnosis with a concrete fix plan (the `reflect_error` node) is more effective than feeding the raw error. The prompt still needs to forbid markdown, and the agent must defensively strip fences anyway — LLM output formatting cannot be fully trusted.
 5. **Real data exposes None-safety gaps** — The first streaming runs revealed `None` latency and token fields in history serialization; `int()` casts must be guarded against `None` before they reach the response schema.
 6. **Realistic weekly scope** — Three focused features (streaming, toasts, timeline) plus backend support work is a full week at 1–2h/day. Days 4–7 are substantial enough to warrant their own week rather than a rushed Sunday.
+
+---
+
+## Week 10: TanStack Query, Dashboard, Search, Retry & Frontend Engineering (MVP Complete)
+
+### Summary
+Closed out every pending item from Week 9: the frontend was migrated from hand-rolled `useEffect` data fetching to TanStack Query, a stats **Dashboard** with a new `GET /api/v1/stats` endpoint was added, the execution history gained text search, failed tasks can be **retried** with one click, pages are now lazy-loaded with memoized handlers, the UI is responsive on mobile, and the frontend test suite was set up (vitest + Testing Library with unit tests for `StatusBadge`, `PlanTimeline`, `TaskForm`, `ToastProvider`). On the DevOps side the frontend was **dockerized** (multi-stage node build → nginx that reverse-proxies `/api/v1/` and is SSE-safe), the backend Dockerfile was finalized, a GitHub Actions manual-QA workflow plus issue templates landed, and the docs were rewritten (API reference, frontend architecture, README/AGENTS). With every blocked item delivered, the project reaches its **MVP milestone**: create a task → plan → 4-agent LangGraph execution → live SSE progress → history with search, dashboard stats, retry, all served from a single `docker compose up`.
+
+### Key Deliverables
+- **TanStack Query integration** — `@tanstack/react-query` v5 installed; `queryClient` in `src/services/queryClient.ts` (staleTime 30s, retry 2, no refetch-on-window-focus); `QueryClientProvider` mounted in `main.tsx`; `hooks/useTasks.ts` exposing `useTasks`, `useTaskDetail`, `useTaskMetrics`, `useExecuteTask`
+- **TaskForm migration** — the form's submit state moved from local `useState` to a `useExecuteTask` mutation (`isPending`, server errors surfaced through toasts)
+- **TaskListPage rewrite** — page/status/q state lives in URL search params (shareable, back-button friendly); free-text search with a 400ms debounce that never reloads the page; `keepPreviousData` gives stale-but-stable rows while navigating pages instead of a loading flash
+- **TaskDetailPage rewrite** — data via `useTaskDetail`/`useTaskMetrics`, SSE handlers memoized with `useCallback`, and a retry button driven by `useMutation` that navigates to the new execution; fixed a real bug where `useMutation` was called after an early return (hooks-before-early-returns rule)
+- **Stats endpoint** — `GET /api/v1/stats` backed by `ExecutionRepository.get_stats()`: total/completed/failed/timeout counts, avg duration computed in Postgres via `EXTRACT(epoch FROM completed_at - started_at) * 1000`, success rate (with div-by-zero guard), and the 5 most recent executions; new `schemas/stats.py` (`ExecutionStats`, `RecentExecutionSummary`)
+- **Dashboard page** — `DashboardPage` with a `MetricCard` grid (total, completed, failed, success rate, avg duration, timeouts) plus a recent-executions table linking to task details; registered as a lazy route `/dashboard`, stats integrated into the frontend API service
+- **Search & retry on the backend** — `list_executions` accepts `search_query` (`task_description` LIKE match) wired to the `q` param on `/api/v1/tasks/`; new `POST /api/v1/tasks/{trace_id}/retry` creates a fresh execution from the failed task's description
+- **Performance optimizations** — all pages converted to `React.lazy` + `Suspense` with a `LoadingSpinner` fallback; `useMemo`/`useCallback` applied to the heavy derivation paths (plan→timeline mapping, SSE handlers, merged detail)
+- **Responsive design** — media queries in `styles.css` so the metric grid and task tables collapse cleanly on small screens
+- **Frontend tests** — vitest 4 + jsdom + @testing-library/react + jest-dom; `src/test/setup.ts` with auto-cleanup; `tsconfig.app.json` types extended; unit tests for `StatusBadge`, `PlanTimeline`, `TaskForm`, `ToastProvider`
+- **Frontend Docker image** — multi-stage `node:22-alpine` build → `nginx:alpine` serving the SPA; `nginx.conf` with SPA fallback + `/api/v1/` reverse proxy to `backend:8000` with `proxy_buffering off`, `proxy_cache off` and a 3600s read timeout so SSE streams survive
+- **docker-compose wiring** — frontend service on :8080 depending on backend; backend Dockerfile finished; end-to-end single-command deployment
+- **CI & docs** — GitHub Actions manual-QA workflow (build lint + run frontend tests), issue templates; `docs/api.md`, `docs/ARCHITECTURE.md` (frontend), and README/AGENTS.md rewritten
+
+### Architecture Decisions Worth Highlighting
+| Decision | Rationale |
+|----------|-----------|
+| TanStack Query over custom `useApi` hooks | Request deduplication, caching, background refetch, and mutation state come for free; server state stays in one place instead of scattered `useState`/`useEffect` pairs per page |
+| URL search params as list state | Page/status/q are part of the URL: shareable links, back/forward works, and the input is debounced so keystrokes never reload or re-navigate |
+| `keepPreviousData` for pagination | Renders the previous page's rows while the next page loads — no full-screen spinners between page turns |
+| Stats aggregation in the repository layer | A handful of `func.count` queries + Postgres-side `EXTRACT(epoch ...)` beat loading rows into Python; `total == 0` is guarded to avoid division by zero |
+| nginx as static host + API proxy | Single origin (no CORS), tiny runtime image; disabling proxy buffering is mandatory or SSE events get held up |
+| Retry as a new execution | Reuses the existing execution pipeline and history model; the new run gets its own trace_id, stream, and stats — no special "retried" state machine |
+| Strict hooks-before-early-returns | React forbids conditional hook calls; the retry feature immediately exposed the pattern, fixed as a dedicated commit |
+
+
+### Key Learnings
+1. **TanStack Query removes boilerplate but not hook discipline** — the retry `useMutation` crashed because it was declared after an early return; hooks must be unconditional (fixed in a dedicated commit).
+2. **URL search params are the right home for list-page state** — debounce the text input, keep the URL as source of truth, and sync the local input state back from it (the query textbox survives without reloads).
+3. **SSE breaks silently behind proxies** — nginx default buffering kills streaming responses; `proxy_buffering off` + a long read timeout are non-negotiable for `EventSource`.
+4. **SQL-aggregated stats beat in-Python math** — `EXTRACT(epoch FROM ...)` over `(completed_at - started_at)` gives a correct average without touching row data; always guard `total == 0`.
+5. **Multi-stage Docker for frontends** — node:22-alpine build + nginx:alpine runtime shrinks the image to static assets and makes SPA routing trivial with a fallback.
+6. **vitest + Testing Library slot into Vite cleanly** — globals + jsdom + a tiny `setup.ts`; component tests (badge rendering, timeline statuses, form validation+submission, toast lifecycle) encode UI behavior as reliably as backend tests do.

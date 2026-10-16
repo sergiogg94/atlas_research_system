@@ -91,7 +91,9 @@ export const api = {
 
   /** Retry a failed execution */
   async retryTask(traceId: string) {
-    const response = await fetch(`${API_BASE}/task/${traceId}/retry`);
+    const response = await fetch(`${API_BASE}/task/${traceId}/retry`, {
+      method: "POST",
+    });
     return handleResponse<ExecuteTaskResponse>(response);
   }
 };

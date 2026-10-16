@@ -517,6 +517,25 @@ class TestHistory:
         assert "not found" in response.json()["detail"].lower()
 
 
+class TestRetry:
+    @pytest.mark.asyncio
+    async def test_retry_nonexistent_execution_404(self, client):
+        mock_repo = AsyncMock()
+        mock_repo.get_execution_by_trace_id.return_value = None
+
+        with patch("app.api.routes.retry.execution_repository", mock_repo):
+            response = await client.post("/api/v1/task/nonexistent/retry")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_retry_get_method_not_allowed(self, client):
+        response = await client.get("/api/v1/task/trace-1/retry")
+
+        assert response.status_code == 405
+
+
 class TestErrorScenarios:
     @pytest.mark.asyncio
     async def test_empty_task_description(self, client):

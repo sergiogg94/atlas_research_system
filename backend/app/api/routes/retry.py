@@ -17,7 +17,7 @@ async def retry_execution(trace_id: str):
     execution = await execution_repository.get_execution_by_trace_id(trace_id)
 
     if not execution:
-        return HTTPException(status_code=404, detail="Execturion not found")
+        raise HTTPException(status_code=404, detail="Execution not found")
 
     trace_id = trace_id_var.get() or str(uuid4())
     task_id = str(uuid4())

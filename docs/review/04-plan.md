@@ -27,7 +27,7 @@ Global priority scale (for orientation):
 - **Acceptance:** creating a task (UI or curl) and opening the detail shows progress/report; `GET /api/v1/tasks/{returned id}` responds 200, not `Execution not found`.
 - **Effort:** S · **Impact:** High · **Dep:** none.
 
-## I2 — Fix the Retry button (HTTP method + `raise`)
+## ~~I2 — Fix the Retry button (HTTP method + `raise`)~~ Done
 - **Files:** `frontend/src/services/api.ts:93-95`, `backend/app/api/routes/retry.py:13,20`.
 - **What/why:** the frontend calls `retryTask` with `GET` while the backend exposes `POST` → 405; and when the execution does not exist the handler does `return HTTPException(...)` (returns 200 with an object) instead of `raise` (404). Two three-line bugs.
 - **Acceptance:** the Retry button of a failed execution creates a new execution; `POST /api/v1/task/{nonexistent trace_id}/retry` responds 404 with `{"detail": ...}`.

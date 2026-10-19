@@ -19,10 +19,9 @@ async def retry_execution(trace_id: str):
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
 
-    trace_id = trace_id_var.get() or str(uuid4())
-    task_id = str(uuid4())
+    retry_trace_id = trace_id_var.get() or str(uuid4())
     task_description = execution.task_description
-    logger.info("Retrying task %s: %s", task_id, task_description[:100])
+    logger.info("Retrying task %s: %s", retry_trace_id, task_description[:100])
 
     graph = build_orchestrator_graph()
     try:
@@ -33,18 +32,18 @@ async def retry_execution(trace_id: str):
                     "step_index": 0,
                     "total_steps": 0,
                     "max_steps": MAX_TOTAL_STEPS,
-                    "trace_id": trace_id,
+                    "trace_id": retry_trace_id,
                 }
             ),
             timeout=600.0,
         )
     except TimeoutError:
-        logger.error("Task %s timed out", task_id)
+        logger.error("Task %s timed out", retry_trace_id)
         raise HTTPException(status_code=504, detail="Task execution timed out")
 
     return ExecuteTaskResponse(
         status="success",
-        task_id=task_id,
+        task_id=retry_trace_id,
         objective=result.get("objective", ""),
         plan=result.get("plan"),
         research_findings=result.get("research_findings"),

@@ -21,7 +21,7 @@ Global priority scale (for orientation):
 
 # Must-have (blockers for showing the project)
 
-## I1 — Return a real identifier in `POST /execute-task` and `/retry`
+## ~~I1 — Return a real identifier in `POST /execute-task` and `/retry`~~ Done
 - **Files:** `backend/app/api/routes/orchestrator.py`, `backend/app/api/routes/retry.py`, `backend/app/schemas/orchestrator.py`, `frontend/src/services/api.ts`, `frontend/src/pages/TaskDetailPage.tsx`.
 - **What/why:** today the route generates `task_id = str(uuid4())` that corresponds to nothing; the UI navigates to `/tasks/{task_id}` and shows "Task not found". Return the real `trace_id` (or `execution_id`) that does exist in the DB, and have the frontend navigate with it.
 - **Acceptance:** creating a task (UI or curl) and opening the detail shows progress/report; `GET /api/v1/tasks/{returned id}` responds 200, not `Execution not found`.

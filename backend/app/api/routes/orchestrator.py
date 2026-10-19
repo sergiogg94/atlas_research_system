@@ -17,8 +17,7 @@ router = APIRouter()
 )
 async def execute_task(request: ExecuteTaskRequest):
     trace_id = trace_id_var.get() or str(uuid4())
-    task_id = str(uuid4())
-    logger.info("Starting task %s: %s", task_id, request.task_description[:100])
+    logger.info("Starting task %s: %s", trace_id, request.task_description[:100])
 
     graph = build_orchestrator_graph()
     try:
@@ -35,12 +34,12 @@ async def execute_task(request: ExecuteTaskRequest):
             timeout=600.0,
         )
     except TimeoutError:
-        logger.error("Task %s timed out", task_id)
+        logger.error("Task %s timed out", trace_id)
         raise HTTPException(status_code=504, detail="Task execution timed out")
 
     return ExecuteTaskResponse(
         status="success",
-        task_id=task_id,
+        task_id=trace_id,
         objective=result.get("objective", ""),
         plan=result.get("plan"),
         research_findings=result.get("research_findings"),
